@@ -159,7 +159,7 @@ function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionL
             <View style={[styles.raceTypeDotInner, { backgroundColor: isDQ ? '#EF4444' : color }]} />
           </View>
           <ThemedText
-            style={[styles.raceLabel, { color: isNow ? t.text : dimmed ? t.textSecondary : t.text }]}
+            style={[styles.raceLabel, { color: t.text }]}
           >
             {epreuve.nage}
           </ThemedText>
@@ -526,7 +526,7 @@ export default function PlanningScreen() {
                   color={isNow ? Accent : theme.textSecondary}
                 />
                 <ThemedText
-                  style={[styles.eventLabel, { color: isNow ? Accent : dimmed ? theme.textSecondary : theme.text }]}
+                  style={[styles.eventLabel, { color: isNow ? Accent : theme.text }]}
                 >
                   {item.label}
                 </ThemedText>
@@ -599,6 +599,7 @@ export default function PlanningScreen() {
               style={styles.daySlider}
             >
               {dayLabels.map(day => {
+                const isPast = day.date < todayStr;
                 const isActive = selectedDay === day.index;
                 return (
                   <Pressable
@@ -607,12 +608,13 @@ export default function PlanningScreen() {
                     style={[
                       styles.dayTab,
                       isActive && styles.dayTabActive,
+                      isPast && !isActive && styles.dayTabPast,
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.dayTabLabel,
-                        { color: isActive ? Accent : theme.textSecondary },
+                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.label}
@@ -620,7 +622,7 @@ export default function PlanningScreen() {
                     <ThemedText
                       style={[
                         styles.dayTabDate,
-                        { color: isActive ? Accent : theme.textSecondary },
+                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.date}
@@ -632,6 +634,7 @@ export default function PlanningScreen() {
           ) : (
             <View style={styles.daySwitcher}>
               {dayLabels.map(day => {
+                const isPast = day.date < todayStr;
                 const isActive = selectedDay === day.index;
                 return (
                   <Pressable
@@ -640,12 +643,13 @@ export default function PlanningScreen() {
                     style={[
                       styles.dayTab,
                       isActive && styles.dayTabActive,
+                      isPast && !isActive && styles.dayTabPast,
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.dayTabLabel,
-                        { color: isActive ? Accent : theme.textSecondary },
+                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.label}
@@ -653,7 +657,7 @@ export default function PlanningScreen() {
                     <ThemedText
                       style={[
                         styles.dayTabDate,
-                        { color: isActive ? Accent : theme.textSecondary },
+                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.date}
@@ -722,7 +726,7 @@ const styles = StyleSheet.create({
   headerMeta: { fontSize: 12, fontWeight: '500' },
   timeline: { gap: 0 },
   row: { flexDirection: 'row', marginBottom: 10 },
-  dimmed: { opacity: 0.35 },
+  dimmed: { opacity: 1 },
   timeCol: { width: 52, justifyContent: 'center', alignItems: 'center' },
   timePill: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radii.sm },
   timeText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
@@ -789,6 +793,9 @@ const styles = StyleSheet.create({
   dayTabActive: {
     borderColor: Accent + '40',
     backgroundColor: Accent + '08',
+  },
+  dayTabPast: {
+    opacity: 0.5,
   },
   dayTabLabel: {
     fontSize: 13,
