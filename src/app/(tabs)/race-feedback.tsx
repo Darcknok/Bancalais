@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Accent, Radii, Shadows, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { fetchFeedback, saveFeedback } from '@/lib/api';
 
 const STORAGE_PREFIX = 'race_feedback_';
 
@@ -26,42 +27,110 @@ type Feedback = {
 
 export default function RaceFeedbackScreen() {
   const theme = useTheme();
-  const { competitionId, eventId, nage, typeTour, date } = useLocalSearchParams<{
+  const { competitionId, eventId, nage, typeTour, date, nageurIUF } = useLocalSearchParams<{
     competitionId: string;
     eventId: string;
     nage: string;
     typeTour: string;
     date: string;
+    nageurIUF: string;
   }>();
 
   const [feedback, setFeedback] = useState<Feedback>({ ressenti: '', pointsForts: '', pointsFaibles: '' });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Load existing feedback
+  // Load existing feedback: from API then fallback to AsyncStorage
   useEffect(() => {
     if (!competitionId || !eventId || !typeTour) return;
-    const key = storageKey(competitionId, eventId, typeTour);
-    AsyncStorage.getItem(key).then(json => {
+
+    const loadFromApi = async () => {
+      if (!nageurIUF) return null;
+      const iuf = parseInt(nageurIUF, 10);
+      if (isNaN(iuf)) return null;
+
+      const { data, error } = await fetchFeedback({
+        competition_id: parseInt(competitionId, 10),
+        event_id: parseInt(eventId, 10),
+        type_tour: typeTour,
+        nageur_iuf: iuf,
+      });
+      if (data?.feedback) {
+        return {
+          ressenti: data.feedback.ressenti || '',
+          pointsForts: data.feedback.points_forts || '',
+          pointsFaibles: data.feedback.ameliorer || '',
+        } as Feedback;
+      }
+      return null;
+    };
+
+    const loadFromStorage = async (): Promise<Feedback | null> => {
+      const key = storageKey(competitionId, eventId, typeTour);
+      const json = await AsyncStorage.getItem(key);
       if (json) {
         try {
           const parsed = JSON.parse(json) as Feedback;
-          setFeedback(parsed);
           if (parsed.ressenti || parsed.pointsForts || parsed.pointsFaibles) {
-            setSaved(true);
+            return parsed;
           }
         } catch { /* ignore */ }
       }
-    }).finally(() => setLoading(false));
-  }, [competitionId, eventId, typeTour]);
+      return null;
+    };
+
+    (async () => {
+      // Try API first
+      const apiFeedback = await loadFromApi();
+      if (apiFeedback) {
+        setFeedback(apiFeedback);
+        setSaved(true);
+      } else {
+        // Fallback to AsyncStorage
+        const localFeedback = await loadFromStorage();
+        if (localFeedback) {
+          setFeedback(localFeedback);
+          setSaved(true);
+        }
+      }
+      setLoading(false);
+    })();
+  }, [competitionId, eventId, typeTour, nageurIUF]);
 
   const handleSave = useCallback(async () => {
     if (!competitionId || !eventId || !typeTour) return;
+    setSaving(true);
+
+    // Always save to AsyncStorage
     const key = storageKey(competitionId, eventId, typeTour);
     await AsyncStorage.setItem(key, JSON.stringify(feedback));
+
+    // Try to save to API if we have a nageurIUF
+    if (nageurIUF) {
+      const iuf = parseInt(nageurIUF, 10);
+      if (!isNaN(iuf)) {
+        const { error } = await saveFeedback({
+          competition_id: parseInt(competitionId, 10),
+          event_id: parseInt(eventId, 10),
+          type_tour: typeTour,
+          nage: decodeURIComponent(nage || ''),
+          date: date || '',
+          nageur_iuf: iuf,
+          ressenti: feedback.ressenti,
+          points_forts: feedback.pointsForts,
+          ameliorer: feedback.pointsFaibles,
+        });
+        if (error) {
+          console.warn('[feedback] save to API failed:', error);
+        }
+      }
+    }
+
+    setSaving(false);
     setSaved(true);
     Alert.alert('Enregistré', 'Ton ressenti a bien été sauvegardé.');
-  }, [competitionId, eventId, typeTour, feedback]);
+  }, [competitionId, eventId, typeTour, nageurIUF, nage, date, feedback]);
 
   const hasContent = feedback.ressenti || feedback.pointsForts || feedback.pointsFaibles;
 

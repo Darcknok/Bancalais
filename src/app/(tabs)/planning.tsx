@@ -601,6 +601,7 @@ export default function PlanningScreen() {
                 nage: item.epreuve!.nage,
                 typeTour: (item as any).typeTour || 'Séries',
                 date: (item as any).date || '',
+                nageurIUF: id || '',
               });
               router.push(`/(tabs)/race-feedback?${params.toString()}` as any);
             }} />
