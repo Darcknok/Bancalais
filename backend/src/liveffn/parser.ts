@@ -401,14 +401,14 @@ export function parseProgram(html: string): LiveFFNSession[] {
       if (liClass === 'debutEpreuve') {
         const doorMatch = liText.match(/Ouverture des portes\s*:\s*(\S+)/i);
         if (doorMatch) ouverturePortes = doorMatch[1];
-        items.push({ kind: 'debutEpreuve', label: liText });
+        items.push({ kind: 'debutEpreuve', label: liText, sessionNumero: numero });
         return;
       }
 
       // Non-sport events
       if (liClass === 'EventNonSportif') {
         eventsNonSportifs.push(liText);
-        items.push({ kind: 'nonSportif', label: liText });
+        items.push({ kind: 'nonSportif', label: liText, sessionNumero: numero });
         return;
       }
 
@@ -463,7 +463,7 @@ export function parseProgram(html: string): LiveFFNSession[] {
           nbParticipants: nbParticipantsMatch ? parseInt(nbParticipantsMatch[1], 10) : undefined,
         };
         epreuves.push(event);
-        items.push({ kind: 'sport', label: eventName, epreuve: event });
+        items.push({ kind: 'sport', label: eventName, epreuve: event, sessionNumero: numero });
       }
     });
 

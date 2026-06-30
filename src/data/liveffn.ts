@@ -51,6 +51,7 @@ export type ProgramItem = {
   kind: ProgramItemKind;
   label: string;
   epreuve?: LiveFFNEvent;
+  sessionNumero: number;
 };
 
 export type LiveFFNSession = {

@@ -419,6 +419,18 @@ export default function PlanningScreen() {
     // Collect swimmer's sport items for pause calculation
     const swimmerSportItems: { time: string; epreuve: LiveFFNEvent }[] = [];
 
+    // Determine which sessions have at least one swimmer race
+    const sessionsWithSwimmerRaces = new Set<number>();
+    for (const item of group.mergedItems) {
+      if (item.kind === 'sport' && item.epreuve) {
+        const e = item.epreuve;
+        const roundKey = `${e.id}:${e.typeTour || 'Séries'}`;
+        if (swimmerEventIds.includes(e.id) && swimmerRoundSet.has(roundKey)) {
+          sessionsWithSwimmerRaces.add(item.sessionNumero);
+        }
+      }
+    }
+
     for (const item of group.mergedItems) {
       if (item.kind === 'sport' && item.epreuve) {
         const e = item.epreuve;
@@ -440,14 +452,16 @@ export default function PlanningScreen() {
           epreuve: liveFFNEventToApiEpreuve(e),
         });
         swimmerSportItems.push({ time: e.heure, epreuve: e });
-      } else {
-        // Non-sport / debutEpreuve: always show
-        items.push({
-          kind: 'info',
-          time: item.kind === 'debutEpreuve' ? '' : '',
-          label: item.label,
-          date: currentDate,
-        });
+      } else if (item.kind === 'nonSportif' || item.kind === 'debutEpreuve') {
+        // Only show session annotations if the swimmer has races in that session
+        if (sessionsWithSwimmerRaces.has(item.sessionNumero)) {
+          items.push({
+            kind: 'info',
+            time: '',
+            label: item.label,
+            date: currentDate,
+          });
+        }
       }
     }
 

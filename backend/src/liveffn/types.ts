@@ -83,6 +83,7 @@ export interface ProgramItem {
   kind: ProgramItemKind;
   label: string;           // "Second echauffement", "Ouverture des portes : 07h30"
   epreuve?: LiveFFNEvent;  // seulement pour kind='sport'
+  sessionNumero: number;   // session de rattachement pour filtrage nageur
 }
 
 /** Session/Réunion dans le programme */
