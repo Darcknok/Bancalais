@@ -136,7 +136,7 @@ function PulseDot({ color }: { color: string }) {
   );
 }
 
-function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionLabel, resultTime }: { epreuve: ApiEpreuve; status: ItemStatus; theme: Record<string, string>; pb?: string; dqRemark?: string; sessionLabel?: string; resultTime?: string }) {
+function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionLabel, resultTime, onPress }: { epreuve: ApiEpreuve; status: ItemStatus; theme: Record<string, string>; pb?: string; dqRemark?: string; sessionLabel?: string; resultTime?: string; onPress?: () => void }) {
   const isNow = status === 'current';
   const dimmed = status === 'past';
   const color = nageCouleurs[epreuve.type_nage as keyof typeof nageCouleurs] ?? Accent;
@@ -145,7 +145,8 @@ function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionL
   const displayTime = resultTime || pb || '—';
 
   return (
-    <DoubleBezelCard noPadding gap={0} accent={isNow} style={isNow ? (Shadows.soft as any) : undefined}>
+    <Pressable onPress={onPress}>
+      <DoubleBezelCard noPadding gap={0} accent={isNow} style={isNow ? (Shadows.soft as any) : undefined}>
       <View style={styles.raceInner}>
         {sessionLabel && (
           <View style={styles.sessionLabelRow}>
@@ -197,6 +198,7 @@ function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionL
         )}
       </View>
     </DoubleBezelCard>
+    </Pressable>
   );
 }
 
@@ -413,6 +415,7 @@ export default function PlanningScreen() {
       remark?: string;
       resultTime?: string;
       sessionLabel?: string;
+      typeTour?: string;
       epreuve?: ApiEpreuve;
     }[] = [];
 
@@ -449,6 +452,7 @@ export default function PlanningScreen() {
           remark,
           resultTime,
           sessionLabel: (e as any)._sessionLabel,
+          typeTour: e.typeTour,
           epreuve: liveFFNEventToApiEpreuve(e),
         });
         swimmerSportItems.push({ time: e.heure, epreuve: e });
@@ -590,7 +594,16 @@ export default function PlanningScreen() {
 
         <View style={styles.cardCol}>
           {isRace && item.epreuve ? (
-            <RaceCard epreuve={item.epreuve} status={status} theme={theme} pb={pbMap.get(item.epreuve.nage.toLowerCase())} dqRemark={dqRemark} sessionLabel={item.sessionLabel} resultTime={'resultTime' in item ? (item as any).resultTime : undefined} />
+            <RaceCard epreuve={item.epreuve} status={status} theme={theme} pb={pbMap.get(item.epreuve.nage.toLowerCase())} dqRemark={dqRemark} sessionLabel={item.sessionLabel} resultTime={'resultTime' in item ? (item as any).resultTime : undefined} onPress={() => {
+              const params = new URLSearchParams({
+                competitionId: String(comp!.id),
+                eventId: String(item.epreuve!.id),
+                nage: item.epreuve!.nage,
+                typeTour: (item as any).typeTour || 'Séries',
+                date: (item as any).date || '',
+              });
+              router.push(`/(tabs)/race-feedback?${params.toString()}` as any);
+            }} />
           ) : (
             <DoubleBezelCard noPadding gap={0} accent={isNow}>
               <View style={[styles.eventRow, { padding: 14 }]}>
