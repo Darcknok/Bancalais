@@ -45,12 +45,21 @@ export type LiveFFNCompetitionDetail = {
   organizerUrl?: string;
 };
 
+export type ProgramItemKind = 'debutEpreuve' | 'sport' | 'nonSportif';
+
+export type ProgramItem = {
+  kind: ProgramItemKind;
+  label: string;
+  epreuve?: LiveFFNEvent;
+};
+
 export type LiveFFNSession = {
   date: string;
   numero: number;
   heureDebut: string;
   ouverturePortes: string;
   epreuves: LiveFFNEvent[];
+  items: ProgramItem[];
 };
 
 export type LiveFFNEvent = {

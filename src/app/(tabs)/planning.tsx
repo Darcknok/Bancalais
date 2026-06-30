@@ -346,16 +346,30 @@ export default function PlanningScreen() {
     // Sort by date
     const sorted = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
     return sorted.map(([date, sessionsOnDate], idx) => {
-      // Merge all events from all sessions on this date, sorted by time
+      // Merge all sport events from all sessions, sorted by time
       const merged: LiveFFNEvent[] = [];
       for (const s of sessionsOnDate) {
         for (const e of s.epreuves) {
-          // Attach a session label for display
           merged.push({ ...e, _sessionLabel: sessionsOnDate.length > 1 ? `Réunion ${s.numero}` : undefined });
         }
       }
       merged.sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
-      return { index: idx, date, label: `Jour ${idx + 1}`, sessions: sessionsOnDate, epreuves: merged };
+      // Concatenate all items (sport + annotations) preserving session and HTML order
+      const mergedItems: ProgramItem[] = [];
+      const multi = sessionsOnDate.length > 1;
+      for (const s of sessionsOnDate) {
+        for (const item of s.items) {
+          if (item.kind === 'sport' && item.epreuve) {
+            mergedItems.push({
+              ...item,
+              epreuve: { ...item.epreuve, _sessionLabel: multi ? `Réunion ${s.numero}` : undefined },
+            });
+          } else {
+            mergedItems.push(item);
+          }
+        }
+      }
+      return { index: idx, date, label: `Jour ${idx + 1}`, sessions: sessionsOnDate, epreuves: merged, mergedItems };
     });
   }, [sessions]);
 
@@ -389,8 +403,10 @@ export default function PlanningScreen() {
 
   const dayItems = useMemo(() => {
     const currentDate = dayGroups[selectedDay]?.date || '';
+    const group = dayGroups[selectedDay];
+    if (!group) return [];
     const items: {
-      kind: 'race' | 'pause';
+      kind: 'race' | 'pause' | 'info';
       time: string;
       label: string;
       date?: string;
@@ -400,38 +416,61 @@ export default function PlanningScreen() {
       epreuve?: ApiEpreuve;
     }[] = [];
 
-    for (let i = 0; i < filteredDayEpreuves.length; i++) {
-      const e = filteredDayEpreuves[i];
-      const roundKey = `${e.id}:${(e as any).typeTour || 'Séries'}`;
-      // Find matching result by eventId + round
-      const matchedResults = swimmerResultsMap.get(e.id);
-      const result = matchedResults && swimmerRoundSet.has(roundKey) ? matchedResults : undefined;
-      const resultTime = (result && result.time !== '--:--.--') ? result.time : undefined;
-      const remark = (result?.remark && result.time === '--:--.--') ? result.remark : undefined;
-      items.push({
-        kind: 'race',
-        time: e.heure,
-        label: e.nom,
-        date: currentDate,
-        remark,
-        resultTime,
-        sessionLabel: (e as any)._sessionLabel,
-        epreuve: liveFFNEventToApiEpreuve(e),
-      });
-      if (i < filteredDayEpreuves.length - 1) {
-        const next = filteredDayEpreuves[i + 1];
-        const pauseMin = calculatePauseMinutes(e.heure, next.heure);
+    // Collect swimmer's sport items for pause calculation
+    const swimmerSportItems: { time: string; epreuve: LiveFFNEvent }[] = [];
+
+    for (const item of group.mergedItems) {
+      if (item.kind === 'sport' && item.epreuve) {
+        const e = item.epreuve;
+        const roundKey = `${e.id}:${e.typeTour || 'Séries'}`;
+        const swimmerRaces = swimmerEventIds.includes(e.id) && swimmerRoundSet.has(roundKey);
+        if (!swimmerRaces) continue;
+        const matchedResults = swimmerResultsMap.get(e.id);
+        const result = matchedResults && swimmerRoundSet.has(roundKey) ? matchedResults : undefined;
+        const resultTime = (result && result.time !== '--:--.--') ? result.time : undefined;
+        const remark = (result?.remark && result.time === '--:--.--') ? result.remark : undefined;
+        items.push({
+          kind: 'race',
+          time: e.heure,
+          label: e.nom,
+          date: currentDate,
+          remark,
+          resultTime,
+          sessionLabel: (e as any)._sessionLabel,
+          epreuve: liveFFNEventToApiEpreuve(e),
+        });
+        swimmerSportItems.push({ time: e.heure, epreuve: e });
+      } else {
+        // Non-sport / debutEpreuve: always show
+        items.push({
+          kind: 'info',
+          time: item.kind === 'debutEpreuve' ? '' : '',
+          label: item.label,
+          date: currentDate,
+        });
+      }
+    }
+
+    // Compute pauses between consecutive swimmer races (not info/pause items)
+    if (swimmerSportItems.length > 1) {
+      for (let i = 0; i < swimmerSportItems.length - 1; i++) {
+        const pauseMin = calculatePauseMinutes(swimmerSportItems[i].time, swimmerSportItems[i + 1].time);
         if (pauseMin > 0) {
-          items.push({
-            kind: 'pause',
-            time: '',
-            label: formatPause(pauseMin),
-          });
+          // Find position of current race in items array
+          const raceIdx = items.findIndex(it => it.kind === 'race' && it.time === swimmerSportItems[i].time);
+          if (raceIdx >= 0) {
+            items.splice(raceIdx + 1, 0, {
+              kind: 'pause',
+              time: '',
+              label: formatPause(pauseMin),
+            });
+          }
         }
       }
     }
+
     return items;
-  }, [filteredDayEpreuves, dayGroups, selectedDay, swimmerResultsMap, swimmerRoundSet]);
+  }, [filteredDayEpreuves, dayGroups, selectedDay, swimmerResultsMap, swimmerRoundSet, swimmerEventIds]);
 
   if (loading || !comp) {
     return (
@@ -485,6 +524,27 @@ export default function PlanningScreen() {
             </ThemedText>
           </View>
           <View style={[styles.pauseLine, { backgroundColor: theme.hairline }]} />
+        </View>
+      );
+    }
+
+    if (item.kind === 'info') {
+      const isDebut = item.label.toLowerCase().includes('ouverture');
+      const isFin = item.label.toLowerCase().includes('fin');
+      return (
+        <View key={i} style={styles.infoBlock}>
+          <View style={[styles.infoLine, { backgroundColor: theme.hairline }]} />
+          <View style={styles.infoContent}>
+            <Ionicons
+              name={isDebut ? 'enter-outline' : isFin ? 'exit-outline' : 'information-circle-outline'}
+              size={12}
+              color={theme.textSecondary}
+            />
+            <ThemedText style={[styles.infoText, { color: theme.textSecondary + 'cc' }]}>
+              {item.label}
+            </ThemedText>
+          </View>
+          <View style={[styles.infoLine, { backgroundColor: theme.hairline }]} />
         </View>
       );
     }
@@ -601,6 +661,7 @@ export default function PlanningScreen() {
               {dayLabels.map(day => {
                 const isPast = day.date < todayStr;
                 const isActive = selectedDay === day.index;
+                const isToday = day.date === todayStr;
                 return (
                   <Pressable
                     key={day.index}
@@ -608,13 +669,14 @@ export default function PlanningScreen() {
                     style={[
                       styles.dayTab,
                       isActive && styles.dayTabActive,
-                      isPast && !isActive && styles.dayTabPast,
+                      isPast && !isActive && !isToday && styles.dayTabPast,
+                      isToday && !isActive && styles.dayTabToday,
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.dayTabLabel,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : isToday ? Accent + 'cc' : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.label}
@@ -622,7 +684,7 @@ export default function PlanningScreen() {
                     <ThemedText
                       style={[
                         styles.dayTabDate,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : isToday ? Accent + 'cc' : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.date}
@@ -636,6 +698,7 @@ export default function PlanningScreen() {
               {dayLabels.map(day => {
                 const isPast = day.date < todayStr;
                 const isActive = selectedDay === day.index;
+                const isToday = day.date === todayStr;
                 return (
                   <Pressable
                     key={day.index}
@@ -643,13 +706,14 @@ export default function PlanningScreen() {
                     style={[
                       styles.dayTab,
                       isActive && styles.dayTabActive,
-                      isPast && !isActive && styles.dayTabPast,
+                      isPast && !isActive && !isToday && styles.dayTabPast,
+                      isToday && !isActive && styles.dayTabToday,
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.dayTabLabel,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : isToday ? Accent + 'cc' : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.label}
@@ -657,7 +721,7 @@ export default function PlanningScreen() {
                     <ThemedText
                       style={[
                         styles.dayTabDate,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : isToday ? Accent + 'cc' : isPast ? theme.textSecondary + '60' : theme.textSecondary },
                       ]}
                     >
                       {day.date}
@@ -763,6 +827,13 @@ const styles = StyleSheet.create({
   pauseContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   pauseText: { fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase' },
   pauseLine: { flex: 1, height: 1 },
+  infoBlock: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.two,
+    paddingVertical: Spacing.one, paddingLeft: 48, marginVertical: 2,
+  },
+  infoContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  infoText: { fontSize: 10, fontWeight: '500', letterSpacing: 0.6, textTransform: 'uppercase' },
+  infoLine: { flex: 1, height: 1 },
   pulseDot: { width: 6, height: 6, borderRadius: 3 },
   nowLabel: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -796,6 +867,11 @@ const styles = StyleSheet.create({
   },
   dayTabPast: {
     opacity: 0.5,
+  },
+  dayTabToday: {
+    borderBottomWidth: 2,
+    borderBottomColor: Accent + '60',
+    borderRadius: 0,
   },
   dayTabLabel: {
     fontSize: 13,
