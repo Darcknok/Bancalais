@@ -599,7 +599,6 @@ export default function PlanningScreen() {
               style={styles.daySlider}
             >
               {dayLabels.map(day => {
-                const isPast = day.date < todayStr;
                 const isActive = selectedDay === day.index;
                 return (
                   <Pressable
@@ -608,13 +607,12 @@ export default function PlanningScreen() {
                     style={[
                       styles.dayTab,
                       isActive && styles.dayTabActive,
-                      isPast && !isActive && styles.dayTabPast,
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.dayTabLabel,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : theme.textSecondary },
                       ]}
                     >
                       {day.label}
@@ -622,7 +620,7 @@ export default function PlanningScreen() {
                     <ThemedText
                       style={[
                         styles.dayTabDate,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : theme.textSecondary },
                       ]}
                     >
                       {day.date}
@@ -634,7 +632,6 @@ export default function PlanningScreen() {
           ) : (
             <View style={styles.daySwitcher}>
               {dayLabels.map(day => {
-                const isPast = day.date < todayStr;
                 const isActive = selectedDay === day.index;
                 return (
                   <Pressable
@@ -643,13 +640,12 @@ export default function PlanningScreen() {
                     style={[
                       styles.dayTab,
                       isActive && styles.dayTabActive,
-                      isPast && !isActive && styles.dayTabPast,
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.dayTabLabel,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : theme.textSecondary },
                       ]}
                     >
                       {day.label}
@@ -657,7 +653,7 @@ export default function PlanningScreen() {
                     <ThemedText
                       style={[
                         styles.dayTabDate,
-                        { color: isActive ? Accent : isPast ? theme.textSecondary + '60' : theme.textSecondary },
+                        { color: isActive ? Accent : theme.textSecondary },
                       ]}
                     >
                       {day.date}
@@ -793,9 +789,6 @@ const styles = StyleSheet.create({
   dayTabActive: {
     borderColor: Accent + '40',
     backgroundColor: Accent + '08',
-  },
-  dayTabPast: {
-    opacity: 0.5,
   },
   dayTabLabel: {
     fontSize: 13,
