@@ -33,7 +33,6 @@
 ### Priorité Faible
 - [ ] **Mentions légales** : rédiger les CGU et politique de confidentialité
 - [ ] **Email de bienvenue** : template pour l'email post-inscription
-- [ ] **App Store description** : texte pour la fiche App Store/Google Play
 
 ## Fichiers clés
 - `src/app/(tabs)/` — tous les écrans (textes UI)

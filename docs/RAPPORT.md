@@ -1,6 +1,6 @@
 # Rapport complet — Bancalais
 
-> Généré le 30 juin 2026
+> Généré le 30 juin 2026 — Phase de préparation session de test
 
 ---
 
@@ -15,7 +15,7 @@
 | Notifications | ✅ Terminé | CRUD notifications, filtrage par rôle, marquer comme lu |
 | Compétitions | ✅ Terminé | CRUD compétitions + épreuves + inscriptions |
 | **LiveFFN (scraper)** | ✅ Terminé | 9 parseurs cheerio, 12 routes Express, cache mémoire |
-| **Feedback nageur** | ✅ **Nouveau** | `POST/GET/DELETE /api/feedback` — persistance Supabase |
+| **Feedback nageur** | ✅ Terminé | `POST/GET/DELETE /api/feedback` — persistance Supabase |
 | Middleware auth | ✅ Terminé | `authMiddleware` + `requireRole()` |
 
 ### 1.2 Base de données Supabase
@@ -23,7 +23,7 @@
 | Migration | Statut | Contenu |
 |-----------|--------|---------|
 | `001_init.sql` | ✅ Exécutée | Tables auth, clubs, notifications, PBs |
-| `002_liveffn.sql` | ✅ **Exécutée** | `liveffn_competitions`, `liveffn_epreuves`, `liveffn_resultats` |
+| `002_liveffn.sql` | ✅ Exécutée | `liveffn_competitions`, `liveffn_epreuves`, `liveffn_resultats` |
 | `003_race_feedback.sql` | ⏳ **À exécuter** | `race_feedback` (ressenti, points forts, à améliorer) |
 
 ### 1.3 Frontend Mobile (Expo / React Native)
@@ -34,7 +34,7 @@
 | Connexion | ✅ Terminé | Login avec email + mot de passe |
 | Accueil | ✅ Terminé | Filtre "Mes compétitions"/"Global", par défaut local |
 | Planning | ✅ Terminé | Filtrage nageur LiveFFN, sélecteur jour, aujourd'hui mis en valeur, pauses formatées, annotations session |
-| **Race Feedback** | ✅ **Nouveau** | 3 champs (Ressenti, Points forts, À améliorer), AsyncStorage + API |
+| **Race Feedback** | ✅ Terminé | 3 champs (Ressenti, Points forts, À améliorer), AsyncStorage + API |
 | Notifications | ✅ Terminé | Liste des notifications, marquer comme lu |
 | Réglages | ✅ Modifié | Accès coach/admin restreint aux IDs 1 et 10 |
 | Coach | ✅ Modifié | Accès restreint aux IDs 1 et 10 (au lieu de rôle coach) |
@@ -60,29 +60,28 @@
 
 ---
 
-## 2. Ce qu'il reste à faire — Prioritaire
+## 2. Ce qu'il reste à faire
 
 ### ⚠️ AVANT LA SESSION DE TEST
 
 | # | Tâche | Équipe | Détail |
 |---|-------|--------|--------|
-| 1 | **Exécuter `003_race_feedback.sql`** | Dev | Dashboard Supabase → SQL Editor → coller/coller `backend/migrations/003_race_feedback.sql` → Run |
+| 1 | **Exécuter `003_race_feedback.sql`** | Dev | Dashboard Supabase → SQL Editor → coller `backend/migrations/003_race_feedback.sql` → Run |
 | 2 | **Redémarrer le backend** | Dev | `cd backend && npm run dev` (après la migration) |
-| 3 | **Build APK de test** | Dev/Com | `eas build --platform android --profile preview` |
-| 4 | **Distribuer l'APK aux testeurs** | Com | Envoyer le lien EAS ou le .apk |
+| 3 | **Build APK de test** | Dev / Test | `eas build --platform android --profile preview` |
+| 4 | **Distribuer l'APK aux testeurs** | Test | Envoyer le lien EAS ou le .apk |
 | 5 | **Tester le parcours complet** | QA | Voir `docs/equipes/3-inspection.md` |
 
-### 📋 AVANT LANCEMENT PUBLIC
+### 📋 AMÉLIORATIONS (post-test)
 
 | # | Tâche | Équipe | Détail |
 |---|-------|--------|--------|
-| 6 | Activer le vrai guard admin | Dev | `config.nodeEnv !== 'production'` → `return next()` à corriger |
-| 7 | Changer le JWT secret | Dev | Remplacer le fallback par une variable d'env |
-| 8 | Configurer CORS prod | Dev | `origin: true` → restreindre au domaine |
-| 9 | Tester dark mode tous écrans | Design | Contraster, lisibilité |
-| 10 | États vides (onboarding) | Design/Redac | Illustrations + textes |
-| 11 | Messages d'erreur FR | Redac | Uniformiser FR partout |
-| 12 | Instructions de test | Com | Email avec lien APK + fonctionnalités |
+| 6 | Activer le vrai guard admin en prod | Dev | `config.nodeEnv !== 'production'` → corriger |
+| 7 | Changer le JWT secret | Dev | Remplacer le fallback par variable d'env |
+| 8 | Configurer CORS prod | Dev | Restreindre `origin: true` au domaine |
+| 9 | Tester dark mode tous écrans | Design | Vérifier contrastes et lisibilité |
+| 10 | États vides et onboarding | Design / Rédac | Illustrations + textes |
+| 11 | Messages d'erreur en français | Rédac | Uniformiser FR partout |
 
 ---
 
@@ -133,9 +132,7 @@ bancalais/
 | 💻 Développement | — | `docs/equipes/2-developpement.md` |
 | 🔍 Inspection (QA) | — | `docs/equipes/3-inspection.md` |
 | ✍️ Rédaction | — | `docs/equipes/4-redaction.md` |
-| 📣 Communication | — | `docs/equipes/5-communication.md` |
-
-Chaque équipe a son propre fichier avec les tâches détaillées, les fichiers concernés, et les priorités.
+| 🧪 Préparation session de test | — | `docs/equipes/5-communication.md` |
 
 ---
 
@@ -143,20 +140,21 @@ Chaque équipe a son propre fichier avec les tâches détaillées, les fichiers 
 
 | Commit | Description |
 |--------|-------------|
+| `dd92ad7` | Range docs dans docs/ (CHARTE, LIVEFFN, Steps) |
+| `648c09a` | Finalisation pré-session de test (rôle, privilège, docs) |
 | `4bd30cd` | Persistance feedback en Supabase + API backend |
 | `d299ad7` | Écran feedback course (Ressenti, Points forts, À améliorer) |
 | `7d1dd98` | Nettoyage label début épreuve |
 | `07b2f57` | Filtrage annotations de session par session du nageur |
 | `d997526` | Annotations session planning + mise en valeur aujourd'hui |
-| `HEAD (non commité)` | Retrait sélecteur rôle inscription + restriction dashboard aux IDs 1/10 |
 
 ---
 
 ## 6. Prochaines actions immédiates
 
-1. ✅ **Exécuter la migration SQL** `003_race_feedback.sql` dans Supabase
-2. ✅ **Redémarrer le backend**
-3. ✅ **Rebuild l'APK** (`eas build --platform android --profile preview`)
-4. ✅ **Lancer la session de test**
-5. ❌ Itérer sur les retours QA
-6. ❌ Préparer le lancement public
+1. ❌ **Exécuter la migration SQL** `003_race_feedback.sql` dans Supabase
+2. ❌ **Redémarrer le backend**
+3. ❌ **Rebuild l'APK** (`eas build --platform android --profile preview`)
+4. ❌ **Distribuer l'APK aux testeurs**
+5. ❌ **Lancer la session de test**
+6. ⏳ Itérer sur les retours QA
