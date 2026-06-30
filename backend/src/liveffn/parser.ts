@@ -401,7 +401,9 @@ export function parseProgram(html: string): LiveFFNSession[] {
       if (liClass === 'debutEpreuve') {
         const doorMatch = liText.match(/Ouverture des portes\s*:\s*(\S+)/i);
         if (doorMatch) ouverturePortes = doorMatch[1];
-        items.push({ kind: 'debutEpreuve', label: liText, sessionNumero: numero });
+        // Use a clean label without "Les horaires sont donnés à titre indicatif"
+        const cleanLabel = doorMatch ? `Ouverture des portes : ${doorMatch[1]}` : liText;
+        items.push({ kind: 'debutEpreuve', label: cleanLabel, sessionNumero: numero });
         return;
       }
 
