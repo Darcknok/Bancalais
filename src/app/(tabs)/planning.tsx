@@ -601,7 +601,7 @@ export default function PlanningScreen() {
                 nage: item.epreuve!.nage,
                 typeTour: (item as any).typeTour || 'Séries',
                 date: (item as any).date || '',
-                nageurIUF: id || '',
+                nageurIUF: String(participant?.iuf ?? ''),
               });
               router.push(`/(tabs)/race-feedback?${params.toString()}` as any);
             }} />
@@ -816,8 +816,8 @@ const styles = StyleSheet.create({
   headerLieu: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   headerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   headerMeta: { fontSize: 12, fontWeight: '500' },
-  timeline: { gap: 0 },
-  row: { flexDirection: 'row', marginBottom: 10 },
+  timeline: { gap: 6 },
+  row: { flexDirection: 'row', marginBottom: 16 },
   dimmed: { opacity: 1 },
   timeCol: { width: 52, justifyContent: 'center', alignItems: 'center' },
   timePill: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radii.sm },
@@ -870,36 +870,37 @@ const styles = StyleSheet.create({
   nowLabelText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   bottomSpacer: { height: Spacing.three },
   daySlider: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   daySliderContent: {
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 0,
   },
   daySwitcher: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 16,
   },
   dayTab: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: Radii.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
   },
   dayTabActive: {
-    borderColor: Accent + '40',
-    backgroundColor: Accent + '08',
+    borderColor: Accent + '60',
+    backgroundColor: Accent + '12',
   },
   dayTabPast: {
     opacity: 0.5,
   },
   dayTabToday: {
-    borderBottomWidth: 2,
-    borderBottomColor: Accent + '60',
-    borderRadius: 0,
+    borderColor: Accent + '30',
+    backgroundColor: Accent + '06',
+    borderWidth: 1,
+    borderRadius: Radii.md,
   },
   dayTabLabel: {
     fontSize: 13,

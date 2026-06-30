@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../supabase';
 import { config } from '../config';
+import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
+
+router.use(authMiddleware);
 
 // ─── POST /api/feedback — Save or update feedback ──────────────
 router.post('/', async (req: Request, res: Response) => {

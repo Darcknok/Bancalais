@@ -13,7 +13,20 @@ import { liveffnRouter } from './liveffn/routes';
 const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: true }));
+const corsOrigins = config.nodeEnv === 'production'
+  ? ['https://bancalais.fr', 'https://www.bancalais.fr']
+  : ['http://localhost:8081', 'http://192.168.1.60:8081', 'http://localhost:4000'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

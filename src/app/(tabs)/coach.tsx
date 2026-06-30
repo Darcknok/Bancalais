@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
@@ -50,12 +50,14 @@ export default function CoachScreen() {
 
   const clubName = useMemo(() => {
     if (!clubId) return '';
-    return clubs.find(c => c.id === clubId)?.name ?? '';
+    // Chat désactivé — le nom du club viendra d'ailleurs plus tard
+    return '';
   }, [clubId]);
 
   const swimmers = useMemo(() => {
     if (!clubId) return [];
-    return getUsersByClub(clubId).filter(u => u.role === 'swimmer');
+    // Chat désactivé — la liste des nageurs viendra d'ailleurs plus tard
+    return [];
   }, [clubId]);
 
   // Chat désactivé pour le moment
