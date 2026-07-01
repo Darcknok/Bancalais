@@ -28,6 +28,7 @@ type AuthContextType = {
   changeClub: (clubId: number | null, referralCode?: string) => void;
   isCoach: boolean;
   isAdmin: boolean;
+  isSwimmer: boolean;
   /** Users with IDs 1 or 10 can access dashboards (coach/admin panels) */
   isPrivileged: boolean;
 };
@@ -42,6 +43,7 @@ const AuthContext = createContext<AuthContextType>({
   changeClub: () => {},
   isCoach: false,
   isAdmin: false,
+  isSwimmer: false,
   isPrivileged: false,
 });
 
@@ -143,7 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         changeClub,
         isCoach: user?.role === 'coach',
         isAdmin: user?.role === 'admin',
-        isPrivileged: user?.id === 1 || user?.id === 10,
+        isSwimmer: user?.role === 'swimmer',
+        isPrivileged: (user?.id === 1 || user?.id === 10) && user?.role !== 'swimmer',
       }}
     >
       {children}

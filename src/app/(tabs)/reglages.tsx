@@ -25,7 +25,7 @@ export default function ReglagesScreen() {
   const [editNom, setEditNom] = useState(user?.nom ?? '');
   const [prefs, setPrefs] = useState<NotificationPreferences>(
     user?.preferences ?? {
-      messages: true, announcements: true, eventReminders: true, mentions: true, clubInvites: true,
+      messages: true, announcements: true, eventReminders: true, mentions: true, clubInvites: true, reminderDelay: 10,
     }
   );
 
@@ -366,6 +366,41 @@ export default function ReglagesScreen() {
             onToggle={() => togglePref('clubInvites')}
             theme={theme}
           />
+          <View style={[styles.fieldDivider, { backgroundColor: theme.hairline }]} />
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="timer-outline" size={13} color={theme.textSecondary} />
+              <ThemedText style={[styles.rowLabel, { color: theme.text }]}>Rappel avant course</ThemedText>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              {[5, 10, 15, 30].map(mins => (
+                <Pressable
+                  key={mins}
+                  onPress={() => {
+                    const next = { ...prefs, reminderDelay: mins };
+                    setPrefs(next);
+                    updateProfile({ preferences: next });
+                  }}
+                  style={[
+                    styles.delayOption,
+                    {
+                      backgroundColor: prefs.reminderDelay === mins ? Accent + '15' : theme.hairline,
+                      borderColor: prefs.reminderDelay === mins ? Accent : 'transparent',
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.delayOptionText,
+                      { color: prefs.reminderDelay === mins ? Accent : theme.textSecondary },
+                    ]}
+                  >
+                    {mins}min
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </DoubleBezelCard>
 
         {/* Affichage */}
@@ -576,6 +611,13 @@ const styles = StyleSheet.create({
   },
   clubPreviewName: { fontSize: 16, fontWeight: '700' },
   clubPreviewCity: { fontSize: 13, fontWeight: '500' },
+  delayOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radii.sm,
+    borderWidth: 1,
+  },
+  delayOptionText: { fontSize: 12, fontWeight: '600' },
   toggle: { width: 44, height: 24, borderRadius: 12, justifyContent: 'center', paddingHorizontal: 2 },
   toggleDot: { width: 20, height: 20, borderRadius: 10 },
   toggleDotActive: { alignSelf: 'flex-end' },

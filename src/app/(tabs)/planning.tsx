@@ -24,6 +24,7 @@ import {
   type ProgramItem,
 } from '@/data/liveffn';
 import { fetchMyPBs } from '@/lib/api';
+import { useRaceReminders } from '@/hooks/use-race-reminders';
 
 type ItemKind = 'event' | 'race' | 'pause';
 type ItemStatus = 'past' | 'current' | 'future';
@@ -559,6 +560,55 @@ export default function PlanningScreen() {
       epreuve?: ApiEpreuve;
     }[];
   }, [comp]);
+
+  // Tous les événements du nageur pour les rappels (tous les jours, pas seulement le jour sélectionné)
+  const allSwimmerEvents = useMemo(() => {
+    if (!swimmerMode) return [];
+    const events: { id: number; name: string; time: string; date?: string; resultTime?: string }[] = [];
+    for (const group of dayGroups) {
+      for (const item of group.mergedItems) {
+        if (item.kind === 'sport' && item.epreuve) {
+          const e = item.epreuve;
+          const roundKey = `${e.id}:${e.typeTour || 'Séries'}`;
+          if (swimmerEventIds.includes(e.id) && swimmerRoundSet.has(roundKey)) {
+            const result = swimmerResultsMap.get(e.id);
+            const resultTime = (result && result.time !== '--:--.--') ? result.time : undefined;
+            events.push({
+              id: e.id,
+              name: e.nom,
+              time: e.heure,
+              date: group.date,
+              resultTime,
+            });
+          }
+        }
+      }
+    }
+    return events;
+  }, [swimmerMode, dayGroups, swimmerEventIds, swimmerRoundSet, swimmerResultsMap]);
+
+  // Mémoriser les résultats précédents pour détecter les nouveaux
+  const prevResultsRef = useRef<Map<number, string | undefined>>(new Map());
+  const currentResults = useMemo(() => {
+    const map = new Map<number, string | undefined>();
+    for (const ev of allSwimmerEvents) {
+      map.set(ev.id, ev.resultTime);
+    }
+    return map;
+  }, [allSwimmerEvents]);
+
+  // Planifier les rappels de course et notifier les nouveaux résultats
+  const reminderDelay = user?.preferences?.reminderDelay ?? 10;
+  useRaceReminders({
+    events: allSwimmerEvents,
+    minutesBefore: reminderDelay,
+    previousResults: prevResultsRef.current,
+  });
+
+  // Mettre à jour le ref après chaque rendu pour la prochaine comparaison
+  useEffect(() => {
+    prevResultsRef.current = currentResults;
+  }, [currentResults]);
 
   if (loading || !comp) {
     return (

@@ -5,11 +5,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/context/auth';
 import { ThemeModeProvider, useThemeMode } from '@/hooks/use-theme-mode';
+import { configureNotificationHandler, requestNotificationPermissions } from '@/lib/notifications';
+
+// Initialiser le handler de notification au niveau du module
+configureNotificationHandler();
 
 function RootLayoutInner() {
   const { mode } = useThemeMode();
   const { user, isLoading } = useAuth();
   const segments = useSegments();
+
+  // Demander les permissions de notification au démarrage
+  useEffect(() => {
+    requestNotificationPermissions();
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;

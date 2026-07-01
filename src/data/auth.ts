@@ -6,6 +6,8 @@ export type NotificationPreferences = {
   eventReminders: boolean;
   mentions: boolean;
   clubInvites: boolean;
+  /** Délai en minutes avant une course pour envoyer un rappel */
+  reminderDelay: number;
 };
 
 export type AppUser = {
@@ -28,6 +30,7 @@ const defaultPreferences: NotificationPreferences = {
   eventReminders: true,
   mentions: true,
   clubInvites: true,
+  reminderDelay: 10,
 };
 
 export function profileToUser(profile: any): AppUser {
@@ -48,6 +51,7 @@ export function profileToUser(profile: any): AppUser {
       eventReminders: profile.event_notifications ?? true,
       mentions: profile.mention_notifications ?? true,
       clubInvites: profile.invite_notifications ?? true,
+      reminderDelay: profile.reminder_delay ?? 10,
     },
   };
 }
@@ -66,6 +70,7 @@ export function userToProfile(user: Partial<AppUser>): Record<string, unknown> {
     out.event_notifications = user.preferences.eventReminders;
     out.mention_notifications = user.preferences.mentions;
     out.invite_notifications = user.preferences.clubInvites;
+    out.reminder_delay = user.preferences.reminderDelay;
   }
   return out;
 }
