@@ -20,6 +20,7 @@ import {
   type LiveFFNSession,
   type LiveFFNEvent,
   type LiveFFNRaceResult,
+  type LiveFFNSplit,
   type ProgramItem,
 } from '@/data/liveffn';
 import { fetchMyPBs } from '@/lib/api';
@@ -137,13 +138,15 @@ function PulseDot({ color }: { color: string }) {
   );
 }
 
-function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionLabel, resultTime, onPress }: { epreuve: ApiEpreuve; status: ItemStatus; theme: Record<string, string>; pb?: string; dqRemark?: string; sessionLabel?: string; resultTime?: string; onPress?: () => void }) {
+function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionLabel, resultTime, splits, onPress }: { epreuve: ApiEpreuve; status: ItemStatus; theme: Record<string, string>; pb?: string; dqRemark?: string; sessionLabel?: string; resultTime?: string; splits?: LiveFFNSplit[]; onPress?: () => void }) {
   const isNow = status === 'current';
   const dimmed = status === 'past';
   const color = nageCouleurs[epreuve.type_nage as keyof typeof nageCouleurs] ?? t.accent;
   const pb = epreuve.inscription?.temps_engagement ?? pbFromPBs;
   const isDQ = !!dqRemark;
   const displayTime = resultTime || pb || '—';
+  const [showSplits, setShowSplits] = useState(false);
+  const hasSplits = splits && splits.length > 0;
 
   return (
     <Pressable onPress={onPress}>
@@ -171,6 +174,14 @@ function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionL
                 {dqRemark}
               </ThemedText>
             </View>
+          ) : hasSplits ? (
+            <Pressable onLongPress={() => setShowSplits(v => !v)}>
+              <View style={[styles.racePill, { backgroundColor: resultTime ? color + '20' : pb ? color + '15' : t.hairline }]}>
+                <ThemedText style={[styles.racePillText, { color: resultTime ? '#22C55E' : pb ? color : t.textSecondary }]}>
+                  {displayTime}
+                </ThemedText>
+              </View>
+            </Pressable>
           ) : (
             <View style={[styles.racePill, { backgroundColor: resultTime ? color + '20' : pb ? color + '15' : t.hairline }]}>
               <ThemedText style={[styles.racePillText, { color: resultTime ? '#22C55E' : pb ? color : t.textSecondary }]}>
@@ -179,6 +190,32 @@ function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionL
             </View>
           )}
         </View>
+
+        {showSplits && hasSplits && (
+          <View style={styles.splitsBox}>
+            {splits.map((split, idx) => (
+              <View key={idx} style={styles.splitRow}>
+                <ThemedText style={[styles.splitDist, { color: t.textSecondary }]}>
+                  {split.distance}m
+                </ThemedText>
+                <ThemedText style={[styles.splitTimeVal, { color: t.text }]}>
+                  {split.splitTime}
+                </ThemedText>
+                <ThemedText style={[styles.splitLapVal, { color: t.textSecondary }]}>
+                  ({split.lapTime})
+                </ThemedText>
+                {split.cumulativeTime && (
+                  <ThemedText style={[styles.splitCumul, { color: t.textSecondary + '80' }]}>
+                    ∑ {split.cumulativeTime}
+                  </ThemedText>
+                )}
+              </View>
+            ))}
+            <ThemedText style={[styles.splitsHint, { color: t.textSecondary + '60' }]}>
+              Maintenir à nouveau pour masquer
+            </ThemedText>
+          </View>
+        )}
 
         {epreuve.inscription?.nouveau_temps && (
           <View style={styles.tempsRow}>
@@ -578,6 +615,10 @@ export default function PlanningScreen() {
     const isNow = status === 'current';
     const isRace = item.kind === 'race';
     const dqRemark = 'remark' in item ? item.remark : undefined;
+    // Récupérer les temps de passage depuis les résultats LiveFFN si disponibles
+    const splits = swimmerMode && isRace && item.epreuve
+      ? (swimmerResultsMap.get(item.epreuve.id)?.splits)
+      : undefined;
 
     return (
       <View key={i} style={[styles.row, dimmed && styles.dimmed]}>
@@ -600,7 +641,7 @@ export default function PlanningScreen() {
 
         <View style={styles.cardCol}>
           {isRace && item.epreuve ? (
-            <RaceCard epreuve={item.epreuve} status={status} theme={theme} pb={pbMap.get(item.epreuve.nage.toLowerCase())} dqRemark={dqRemark} sessionLabel={item.sessionLabel} resultTime={'resultTime' in item ? (item as any).resultTime : undefined} onPress={() => {
+            <RaceCard epreuve={item.epreuve} status={status} theme={theme} pb={pbMap.get(item.epreuve.nage.toLowerCase())} dqRemark={dqRemark} sessionLabel={item.sessionLabel} resultTime={'resultTime' in item ? (item as any).resultTime : undefined} splits={splits} onPress={() => {
               const params = new URLSearchParams({
                 competitionId: String(comp!.id),
                 eventId: String(item.epreuve!.id),
@@ -624,12 +665,6 @@ export default function PlanningScreen() {
                 >
                   {item.label}
                 </ThemedText>
-                {isNow && (
-                  <View style={[styles.nowLabel, { backgroundColor: theme.accent + '15' }]}>
-                    <PulseDot color={theme.accent} />
-                    <ThemedText style={[styles.nowLabelText, { color: theme.accent }]}>En cours</ThemedText>
-                  </View>
-                )}
               </View>
             </DoubleBezelCard>
           )}
@@ -933,6 +968,47 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     paddingVertical: Spacing.four,
+  },
+  splitsBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'transparent',
+    gap: 4,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 30,
+  },
+  splitDist: {
+    fontSize: 11,
+    fontWeight: '600',
+    width: 36,
+    fontVariant: ['tabular-nums'],
+  },
+  splitTimeVal: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  splitLapVal: {
+    fontSize: 11,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  splitCumul: {
+    fontSize: 10,
+    fontWeight: '400',
+    fontVariant: ['tabular-nums'],
+  },
+  splitsHint: {
+    fontSize: 9,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   liveBadge: {
     flexDirection: 'row',
