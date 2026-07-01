@@ -98,8 +98,9 @@ function cleanTime(raw: string): string {
   // Si contient une tabulation, prendre avant
   const tabIdx = raw.indexOf('\t');
   if (tabIdx >= 0) return raw.slice(0, tabIdx).trim();
-  // Fallback: avant double espace suivi d'un chiffre (50 m :)
-  const match = raw.match(/^(\d+:\d+\.\d+)/);
+  // Extraire le premier temps valide au format MM:SS.hh ou SS.hh
+  // avec exactement 2 chiffres pour les centièmes (évite de capturer les splits concaténés)
+  const match = raw.match(/^(\d{1,3}:\d{2}\.\d{2}|\d{2}\.\d{2})/);
   if (match) return match[1];
   return raw.trim();
 }
