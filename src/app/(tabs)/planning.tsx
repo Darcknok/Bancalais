@@ -88,6 +88,22 @@ function liveFFNEventToApiEpreuve(event: LiveFFNEvent): ApiEpreuve {
   };
 }
 
+/**
+ * Extrait le temps principal d'une cellule LiveFFN qui peut contenir
+ * les splits concaténés (séparés par tabulation).
+ * Ex: "00:58.08\t50 m : 28.31 (28.31)\t100 m : 58.08 (29.77)" → "00:58.08"
+ */
+function cleanTime(raw: string): string {
+  if (!raw) return raw;
+  // Si contient une tabulation, prendre avant
+  const tabIdx = raw.indexOf('\t');
+  if (tabIdx >= 0) return raw.slice(0, tabIdx).trim();
+  // Fallback: avant double espace suivi d'un chiffre (50 m :)
+  const match = raw.match(/^(\d+:\d+\.\d+)/);
+  if (match) return match[1];
+  return raw.trim();
+}
+
 function parseTime(t: string): number {
   const parts = t.split(':');
   if (parts.length === 2) {
@@ -565,7 +581,7 @@ export default function PlanningScreen() {
           const roundKey = `${e.id}:${e.typeTour || 'Séries'}`;
           if (swimmerEventIds.includes(e.id) && swimmerRoundSet.has(roundKey)) {
             const result = swimmerResultsMap.get(e.id);
-            const resultTime = (result && result.time !== '--:--.--') ? result.time : undefined;
+            const resultTime = (result && result.time !== '--:--.--') ? cleanTime(result.time) : undefined;
             events.push({
               id: e.id,
               name: e.nom,

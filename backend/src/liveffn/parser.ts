@@ -738,6 +738,49 @@ export function parseSwimmerResults(html: string): {
     let timeText = $timeTd.text().trim();
     let remark: string | undefined;
 
+    // Parse splits from the time cell (either HTML tooltip or tab-separated text)
+    const splits: LiveFFNSplit[] = [];
+    const $timeLink = $timeTd.find('a');
+    const splitHtml = $timeLink.find('b[id="splitAutre"]').html() || $timeLink.find('b').html() || '';
+    if (splitHtml) {
+      const $splitDoc = cheerio.load(`<table>${splitHtml}</table>`);
+      $splitDoc('tr').each((_, splitRow) => {
+        const $cells = $splitDoc(splitRow).find('td');
+        if ($cells.length >= 3) {
+          const distText = $cells.eq(0).text().trim().replace(':', '').replace('m', '').trim();
+          const dist = parseInt(distText, 10);
+          if (!isNaN(dist)) {
+            splits.push({
+              distance: dist,
+              splitTime: $cells.eq(1).text().trim(),
+              lapTime: $cells.eq(2).text().trim(),
+              cumulativeTime: $cells.eq(3).text().trim() || undefined,
+            });
+          }
+        }
+      });
+    } else if (timeText.includes('\t')) {
+      // Fallback: parse tab-separated text like "00:58.08\t50 m : 28.31 (28.31)\t100 m : 58.08 (29.77)\t[58.08]"
+      const parts = timeText.split('\t');
+      timeText = parts[0].trim();
+      for (let i = 1; i < parts.length; i++) {
+        const part = parts[i].trim();
+        const bracketMatch = part.match(/^\[([\d.]+)\]$/);
+        if (bracketMatch && splits.length > 0) {
+          splits[splits.length - 1].cumulativeTime = bracketMatch[1];
+          continue;
+        }
+        const splitMatch = part.match(/^(\d+)\s*m\s*:\s*([\d.]+)\s*\(([\d.]+)\)/i);
+        if (splitMatch) {
+          splits.push({
+            distance: parseInt(splitMatch[1], 10),
+            splitTime: splitMatch[2],
+            lapTime: splitMatch[3],
+          });
+        }
+      }
+    }
+
     // Detect DQ/DNS/DSQ/Forfait/Abandon in the time cell
     const dqMatch = timeText.match(/^(DNS|DSQ|DQ|Forfait|Abandon)(?:\s+(.+))?$/i);
     if (dqMatch) {
@@ -767,6 +810,7 @@ export function parseSwimmerResults(html: string): {
       round,
       place: placeText,
       time: timeText,
+      splits: splits.length > 0 ? splits : undefined,
       reactionTime: reactionText || undefined,
       points: pointsText ? parseInt(pointsText, 10) || undefined : undefined,
       remark,
