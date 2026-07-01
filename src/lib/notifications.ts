@@ -9,6 +9,16 @@ import { Platform } from 'react-native';
 // ─── Configuration ─────────────────────────────────────────────
 
 let handlerConfigured = false;
+let notificationListenersAttached = false;
+
+/**
+ * Vérifie si l'app est sur Android 12+ et a besoin de SCHEDULE_EXACT_ALARM.
+ * Sur ces versions, le manifest déclare déjà la permission via app.json
+ * mais l'utilisateur peut la désactiver dans Paramètres → Applications → Bancalais → Alarmes & rappels.
+ */
+export function isExactAlarmRequired(): boolean {
+  return Platform.OS === 'android' && Platform.Version >= 31;
+}
 
 /**
  * Demande les permissions de notification sur l'appareil.
@@ -189,4 +199,65 @@ export async function logScheduledNotifications(): Promise<void> {
   } catch (err) {
     console.error('[notifications] Erreur listage:', err);
   }
+}
+
+// ─── Listeners ──────────────────────────────────────────────────
+
+/**
+ * Attache des écouteurs de notification (reçue, tapée) pour le debug.
+ * Appeler une fois au démarrage de l'app.
+ */
+export function attachNotificationListeners() {
+  if (notificationListenersAttached) return;
+  notificationListenersAttached = true;
+
+  // Notification reçue (app au premier plan ou en arrière-plan)
+  Notifications.addNotificationReceivedListener(notification => {
+    console.log('[notifications] Reçue:', {
+      title: notification.request.content.title,
+      body: notification.request.content.body,
+      data: notification.request.content.data,
+      identifier: notification.request.identifier,
+    });
+  });
+
+  // Notification tapée par l'utilisateur
+  Notifications.addNotificationResponseReceivedListener(response => {
+    console.log('[notifications] Tapée:', {
+      actionIdentifier: response.actionIdentifier,
+      notification: {
+        title: response.notification.request.content.title,
+        data: response.notification.request.content.data,
+      },
+    });
+  });
+}
+
+// ─── Initialisation complète ────────────────────────────────────
+
+/**
+ * Initialisation complète des notifications :
+ * 1. Handler foreground
+ * 2. Permissions + canaux Android
+ * 3. Écouteurs
+ * À appeler UNE FOIS au démarrage de l'app.
+ */
+export async function initNotifications(): Promise<boolean> {
+  console.log('[notifications] Initialisation...');
+
+  // 1. Handler foreground
+  configureNotificationHandler();
+
+  // 2. Permissions
+  const granted = await requestNotificationPermissions();
+  if (!granted) {
+    console.warn('[notifications] Permissions non accordées');
+    return false;
+  }
+
+  // 3. Écouteurs
+  attachNotificationListeners();
+
+  console.log('[notifications] Initialisé avec succès');
+  return true;
 }
