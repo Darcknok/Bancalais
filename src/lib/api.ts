@@ -1,11 +1,11 @@
-import { Platform } from 'react-native';
 import type { UserRole } from '@/data/auth';
+import { Platform } from 'react-native';
 
 const TOKEN_KEY = 'bancalais_jwt';
 
 // Surchargeable via EXPO_PUBLIC_API_HOST
 // Par défaut : IP locale du serveur pour accès depuis le réseau local
-const DEV_API_HOST = process.env.EXPO_PUBLIC_API_HOST || '192.168.1.60';
+const DEV_API_HOST = process.env.EXPO_PUBLIC_API_HOST || 'bancalais.freeboxos.fr';
 
 export const API_BASE_URL = `http://${DEV_API_HOST}:4000`;
 

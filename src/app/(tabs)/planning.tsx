@@ -139,7 +139,7 @@ function PulseDot({ color }: { color: string }) {
 function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionLabel, resultTime, onPress }: { epreuve: ApiEpreuve; status: ItemStatus; theme: Record<string, string>; pb?: string; dqRemark?: string; sessionLabel?: string; resultTime?: string; onPress?: () => void }) {
   const isNow = status === 'current';
   const dimmed = status === 'past';
-  const color = nageCouleurs[epreuve.type_nage as keyof typeof nageCouleurs] ?? Accent;
+  const color = nageCouleurs[epreuve.type_nage as keyof typeof nageCouleurs] ?? t.accent;
   const pb = epreuve.inscription?.temps_engagement ?? pbFromPBs;
   const isDQ = !!dqRemark;
   const displayTime = resultTime || pb || '—';
@@ -233,7 +233,7 @@ export default function PlanningScreen() {
   if (noId) {
     return (
       <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="small" color={Accent} />
+        <ActivityIndicator size="small" color={theme.accent} />
       </ThemedView>
     );
   }
@@ -493,7 +493,7 @@ export default function PlanningScreen() {
   if (loading || !comp) {
     return (
       <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="small" color={Accent} />
+        <ActivityIndicator size="small" color={theme.accent} />
       </ThemedView>
     );
   }
@@ -576,8 +576,8 @@ export default function PlanningScreen() {
     return (
       <View key={i} style={[styles.row, dimmed && styles.dimmed]}>
         <View style={styles.timeCol}>
-          <View style={[styles.timePill, { backgroundColor: isNow ? Accent + '15' : theme.hairline }]}>
-            <ThemedText style={[styles.timeText, { color: isNow ? Accent : theme.textSecondary }]}>
+          <View style={[styles.timePill, { backgroundColor: isNow ? theme.accent + '15' : theme.hairline }]}>
+            <ThemedText style={[styles.timeText, { color: isNow ? theme.accent : theme.textSecondary }]}>
               {item.time || '—'}
             </ThemedText>
           </View>
@@ -585,11 +585,11 @@ export default function PlanningScreen() {
 
         <View style={styles.lineCol}>
           {isNow && (
-            <View style={[styles.nowRing, { borderColor: Accent + '40' }]}>
-              <PulseDot color={Accent} />
+            <View style={[styles.nowRing, { borderColor: theme.accent + '40' }]}>
+              <PulseDot color={theme.accent} />
             </View>
           )}
-          <View style={[styles.timelineBar, { backgroundColor: isNow ? Accent + '60' : theme.hairline }]} />
+          <View style={[styles.timelineBar, { backgroundColor: isNow ? theme.accent + '60' : theme.hairline }]} />
         </View>
 
         <View style={styles.cardCol}>
@@ -611,17 +611,17 @@ export default function PlanningScreen() {
                 <Ionicons
                   name={item.icon! as any}
                   size={15}
-                  color={isNow ? Accent : theme.textSecondary}
+                  color={isNow ? theme.accent : theme.textSecondary}
                 />
                 <ThemedText
-                  style={[styles.eventLabel, { color: isNow ? Accent : theme.text }]}
+                  style={[styles.eventLabel, { color: isNow ? theme.accent : theme.text }]}
                 >
                   {item.label}
                 </ThemedText>
                 {isNow && (
-                  <View style={[styles.nowLabel, { backgroundColor: Accent + '15' }]}>
-                    <PulseDot color={Accent} />
-                    <ThemedText style={[styles.nowLabelText, { color: Accent }]}>En cours</ThemedText>
+                  <View style={[styles.nowLabel, { backgroundColor: theme.accent + '15' }]}>
+                    <PulseDot color={theme.accent} />
+                    <ThemedText style={[styles.nowLabelText, { color: theme.accent }]}>En cours</ThemedText>
                   </View>
                 )}
               </View>
@@ -642,8 +642,8 @@ export default function PlanningScreen() {
 
         <DoubleBezelCard accent style={[Shadows.medium as any]}>
           <View style={styles.headerTop}>
-            <View style={[styles.headerIcon, { backgroundColor: Accent + '15' }]}>
-              <Ionicons name="location" size={16} color={Accent} />
+            <View style={[styles.headerIcon, { backgroundColor: theme.accent + '15' }]}>
+              <Ionicons name="location" size={16} color={theme.accent} />
             </View>
             <View style={styles.headerInfo}>
               <ThemedText style={[styles.headerLieu, { color: theme.text }]}>{comp.lieu}</ThemedText>
@@ -661,14 +661,14 @@ export default function PlanningScreen() {
               )}
               {participant && (
                 <View style={styles.headerMetaRow}>
-                  <Ionicons name="person-outline" size={11} color={Accent} />
-                  <ThemedText style={[styles.headerMeta, { color: Accent }]}>
+                  <Ionicons name="person-outline" size={11} color={theme.accent} />
+                  <ThemedText style={[styles.headerMeta, { color: theme.accent }]}>
                     {participant.prenom} {participant.nom} — {participant.clubName}
                   </ThemedText>
                   {autoRefresh && (
                     <View style={styles.liveBadge}>
                       <PulseDot color="#22C55E" />
-                      <ThemedText style={styles.liveBadgeText}>Live</ThemedText>
+                      <ThemedText style={styles.liveBadgeText}>En direct</ThemedText>
                     </View>
                   )}
                 </View>

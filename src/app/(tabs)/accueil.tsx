@@ -7,7 +7,7 @@ import { DoubleBezelCard } from '@/components/double-bezel-card';
 import { EmptyState } from '@/components/empty-state';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Accent, Radii, Shadows, Spacing } from '@/constants/theme';
+import { Radii, Shadows, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { useTheme } from '@/hooks/use-theme';
 import { nageCouleurs } from '@/data/competitions';
@@ -42,7 +42,8 @@ function StaggerItem({ index, children }: { index: number; children: React.React
 }
 
 function EpreuveTag({ label, typeNage }: { label: string; typeNage: string }) {
-  const color = nageCouleurs[typeNage as keyof typeof nageCouleurs] ?? Accent;
+  const t = useTheme();
+  const color = nageCouleurs[typeNage as keyof typeof nageCouleurs] ?? t.accent;
   const bgRgba = color + '18';
   return (
     <View style={[styles.miniTag, { borderColor: color, backgroundColor: bgRgba }]}>
@@ -96,14 +97,14 @@ export default function AccueilScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={Accent} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={theme.accent} />}
       >
         <View style={styles.header}>
-          <View style={[styles.accentLine, { backgroundColor: Accent }]} />
+          <View style={[styles.accentLine, { backgroundColor: theme.accent }]} />
           <View style={styles.headerTop}>
             <View style={styles.greetingRow}>
-              <View style={[styles.waveBg, { backgroundColor: Accent + '12' }]}>
-                <Ionicons name="water-outline" size={18} color={Accent} />
+              <View style={[styles.waveBg, { backgroundColor: theme.accent + '12' }]}>
+                <Ionicons name="water-outline" size={18} color={theme.accent} />
               </View>
               <View style={styles.greetingTextBlock}>
                 <ThemedText style={[styles.eyebrow, { color: theme.textSecondary }]}>
@@ -111,7 +112,7 @@ export default function AccueilScreen() {
                 </ThemedText>
                 <View style={styles.titleRow}>
                   <ThemedText style={[styles.title, { color: theme.text }]}>Bancalais</ThemedText>
-                  <View style={[styles.titleDot, { backgroundColor: Accent }]} />
+                  <View style={[styles.titleDot, { backgroundColor: theme.accent }]} />
                 </View>
                 <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Natation</ThemedText>
               </View>
@@ -144,7 +145,7 @@ export default function AccueilScreen() {
             onPress={() => setFilterMode('local')}
             style={[
               styles.tabPill,
-              filterMode === 'local' && { backgroundColor: Accent },
+              filterMode === 'local' && { backgroundColor: theme.accent },
               filterMode !== 'local' && { backgroundColor: theme.backgroundElement, borderColor: theme.hairline, borderWidth: 1 },
               filterMode === 'local' && (Shadows.soft as any),
             ]}
@@ -163,7 +164,7 @@ export default function AccueilScreen() {
             onPress={() => setFilterMode('all')}
             style={[
               styles.tabPill,
-              filterMode === 'all' && { backgroundColor: Accent },
+              filterMode === 'all' && { backgroundColor: theme.accent },
               filterMode !== 'all' && { backgroundColor: theme.backgroundElement, borderColor: theme.hairline, borderWidth: 1 },
               filterMode === 'all' && (Shadows.soft as any),
             ]}
@@ -175,7 +176,7 @@ export default function AccueilScreen() {
                 filterMode !== 'all' && { color: theme.textSecondary },
               ]}
             >
-              Global
+              Toutes
             </ThemedText>
           </Pressable>
         </View>
@@ -194,8 +195,8 @@ export default function AccueilScreen() {
         </View>
 
         <View style={styles.sectionHeader}>
-          <View style={[styles.sectionIconRing, { backgroundColor: Accent + '12' }]}>
-            <Ionicons name="calendar" size={12} color={Accent} />
+          <View style={[styles.sectionIconRing, { backgroundColor: theme.accent + '12' }]}>
+            <Ionicons name="calendar" size={12} color={theme.accent} />
           </View>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Compétitions
@@ -210,7 +211,7 @@ export default function AccueilScreen() {
 
         {loading && (
           <View style={styles.loadingState}>
-            <ActivityIndicator size="small" color={Accent} />
+            <ActivityIndicator size="small" color={theme.accent} />
           </View>
         )}
 
@@ -219,8 +220,8 @@ export default function AccueilScreen() {
             <DoubleBezelCard>
               <EmptyState
                 icon={search ? 'search-outline' : 'calendar-outline'}
-                title="Aucun résultat"
-                subtitle={search ? `Aucune compétition pour "${search}"` : 'Aucune compétition à venir'}
+                title={search ? 'Aucun résultat' : 'Aucune compétition trouvée'}
+                subtitle={search ? `Aucune compétition pour "${search}"` : 'Revenez plus tard pour découvrir les prochaines compétitions'}
               />
             </DoubleBezelCard>
           </StaggerItem>
@@ -240,10 +241,10 @@ export default function AccueilScreen() {
                       <ThemedText style={[styles.cardLieu, { color: theme.text }]}>{comp.lieu}</ThemedText>
                       {comp.source === 'liveffn' && (
                         <View style={[styles.sourceBadge, {
-                          backgroundColor: comp.swimmerFound ? '#22C55E' + '18' : Accent + '18',
+                          backgroundColor: comp.swimmerFound ? '#22C55E' + '18' : theme.accent + '18',
                         }]}>
                           <ThemedText style={[styles.sourceBadgeText, {
-                            color: comp.swimmerFound ? '#22C55E' : Accent,
+                            color: comp.swimmerFound ? '#22C55E' : theme.accent,
                           }]}>
                             {comp.swimmerFound ? 'Inscrit' : 'LiveFFN'}
                           </ThemedText>

@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
-import { Accent, Radii, Spacing } from '@/constants/theme';
+import { Radii, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type Props = {
@@ -26,7 +26,7 @@ export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: Pro
       {actionLabel && onAction && (
         <Pressable
           onPress={onAction}
-          style={[styles.actionButton, { backgroundColor: Accent }]}
+          style={[styles.actionButton, { backgroundColor: theme.accent }]}
         >
           <ThemedText style={styles.actionLabel}>{actionLabel}</ThemedText>
         </Pressable>
