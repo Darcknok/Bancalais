@@ -25,6 +25,7 @@ import {
 } from '@/data/liveffn';
 import { fetchMyPBs } from '@/lib/api';
 import { useRaceReminders } from '@/hooks/use-race-reminders';
+import { logScheduledNotifications } from '@/lib/notifications';
 
 type ItemKind = 'event' | 'race' | 'pause';
 type ItemStatus = 'past' | 'current' | 'future';
@@ -193,28 +194,20 @@ function RaceCard({ epreuve, status, theme: t, pb: pbFromPBs, dqRemark, sessionL
         </View>
 
         {showSplits && hasSplits && (
-          <View style={styles.splitsBox}>
+          <View style={styles.splitsRow}>
             {splits.map((split, idx) => (
-              <View key={idx} style={styles.splitRow}>
-                <ThemedText style={[styles.splitDist, { color: t.textSecondary }]}>
-                  {split.distance}m
+              <View key={idx} style={[styles.splitChip, { backgroundColor: t.hairline }]}>
+                <ThemedText style={[styles.splitChipDist, { color: t.textSecondary }]}>
+                  {split.distance}
                 </ThemedText>
-                <ThemedText style={[styles.splitTimeVal, { color: t.text }]}>
+                <ThemedText style={[styles.splitChipTime, { color: t.text }]}>
                   {split.splitTime}
                 </ThemedText>
-                <ThemedText style={[styles.splitLapVal, { color: t.textSecondary }]}>
-                  ({split.lapTime})
+                <ThemedText style={[styles.splitChipLap, { color: t.textSecondary + '99' }]}>
+                  {split.lapTime}
                 </ThemedText>
-                {split.cumulativeTime && (
-                  <ThemedText style={[styles.splitCumul, { color: t.textSecondary + '80' }]}>
-                    ∑ {split.cumulativeTime}
-                  </ThemedText>
-                )}
               </View>
             ))}
-            <ThemedText style={[styles.splitsHint, { color: t.textSecondary + '60' }]}>
-              Maintenir à nouveau pour masquer
-            </ThemedText>
           </View>
         )}
 
@@ -605,6 +598,15 @@ export default function PlanningScreen() {
     previousResults: prevResultsRef.current,
   });
 
+  // Logger les notifications planifiées (debug)
+  useEffect(() => {
+    if (!swimmerMode || allSwimmerEvents.length === 0) return;
+    const timer = setTimeout(() => {
+      logScheduledNotifications();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [swimmerMode, allSwimmerEvents.length]);
+
   // Mettre à jour le ref après chaque rendu pour la prochaine comparaison
   useEffect(() => {
     prevResultsRef.current = currentResults;
@@ -750,18 +752,12 @@ export default function PlanningScreen() {
                   </ThemedText>
                 </View>
               )}
-              {participant && (
+                  {participant && (
                 <View style={styles.headerMetaRow}>
                   <Ionicons name="person-outline" size={11} color={theme.accent} />
                   <ThemedText style={[styles.headerMeta, { color: theme.accent }]}>
                     {participant.prenom} {participant.nom} — {participant.clubName}
                   </ThemedText>
-                  {autoRefresh && (
-                    <View style={styles.liveBadge}>
-                      <PulseDot color="#22C55E" />
-                      <ThemedText style={styles.liveBadgeText}>En direct</ThemedText>
-                    </View>
-                  )}
                 </View>
               )}
             </View>
@@ -1019,62 +1015,33 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: Spacing.four,
   },
-  splitsBox: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'transparent',
-    gap: 4,
+  splitsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 2,
   },
-  splitRow: {
+  splitChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingLeft: 30,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radii.sm,
   },
-  splitDist: {
-    fontSize: 11,
-    fontWeight: '600',
-    width: 36,
-    fontVariant: ['tabular-nums'],
-  },
-  splitTimeVal: {
-    fontSize: 13,
+  splitChipDist: {
+    fontSize: 10,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  splitLapVal: {
+  splitChipTime: {
     fontSize: 11,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
-  },
-  splitCumul: {
-    fontSize: 10,
-    fontWeight: '400',
-    fontVariant: ['tabular-nums'],
-  },
-  splitsHint: {
-    fontSize: 9,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginLeft: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radii.sm,
-    backgroundColor: '#22C55E' + '15',
-  },
-  liveBadgeText: {
-    fontSize: 9,
     fontWeight: '800',
-    color: '#22C55E',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    fontVariant: ['tabular-nums'],
+  },
+  splitChipLap: {
+    fontSize: 9,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
   },
 });

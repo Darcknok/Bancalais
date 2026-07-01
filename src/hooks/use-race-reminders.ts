@@ -1,9 +1,12 @@
 /**
  * Hook useRaceReminders — planifie des notifications de rappel
  * pour les courses d'un nageur, et notifie quand un nouveau résultat apparaît.
+ *
+ * NB: les rappels restent actifs même après démontage du composant.
+ * La planification est persistante jusqu'au prochain changement de données.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   cancelAllRaceReminders,
   notifyRaceResult,
@@ -27,16 +30,28 @@ type Props = {
   previousResults?: Map<number, string | undefined>;
 };
 
-/**
- * Planifie les rappels de course et surveille les nouveaux résultats.
- * À utiliser dans le planning screen quand les données du nageur sont chargées.
- */
 export function useRaceReminders({ events, minutesBefore = 10, previousResults }: Props) {
   const scheduledRef = useRef(false);
+  const eventsKeyRef = useRef('');
 
-  // Planifier les rappels une fois que les events sont disponibles
+  // ─── Planification des rappels ──────────────────────────────
   useEffect(() => {
-    if (!events.length || scheduledRef.current) return;
+    if (!events.length) return;
+
+    // Construire une clé pour détecter les changements de données
+    const key = events.map(e => `${e.id}|${e.time}|${e.date}`).join(';');
+
+    // Si déjà planifié avec les mêmes données, ne rien faire
+    if (scheduledRef.current && key === eventsKeyRef.current) return;
+
+    // Si les données ont changé, annuler les anciens rappels et replanifier
+    if (scheduledRef.current && key !== eventsKeyRef.current) {
+      cancelAllRaceReminders().catch(err =>
+        console.warn('[reminders] Erreur annulation anciens rappels:', err)
+      );
+    }
+
+    eventsKeyRef.current = key;
     scheduledRef.current = true;
 
     events.forEach(event => {
@@ -57,13 +72,10 @@ export function useRaceReminders({ events, minutesBefore = 10, previousResults }
       });
     });
 
-    return () => {
-      cancelAllRaceReminders();
-      scheduledRef.current = false;
-    };
+    // PAS de cleanup — les rappels doivent survivre au démontage du composant
   }, [events, minutesBefore]);
 
-  // Surveiller les nouveaux résultats
+  // ─── Détection des nouveaux résultats ───────────────────────
   useEffect(() => {
     if (!previousResults || !events.length) return;
 
@@ -72,7 +84,6 @@ export function useRaceReminders({ events, minutesBefore = 10, previousResults }
       const previousResult = previousResults.get(event.id);
 
       if (currentResult && currentResult !== previousResult && previousResult !== undefined) {
-        // Nouveau résultat détecté
         notifyRaceResult({
           eventName: event.name,
           time: currentResult,
