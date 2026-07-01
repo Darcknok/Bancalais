@@ -408,12 +408,12 @@ export default function ReglagesScreen() {
         )}
 
         {/* Panneau d'administration */}
-        {isPrivileged && (
+        {isAdmin && (
           <DoubleBezelCard accent style={[Shadows.medium as any]}>
             <Pressable onPress={() => router.push('/(tabs)/developpeur')} style={styles.navRow}>
-              <Ionicons name="settings-outline" size={15} color={isAdmin ? '#F59E0B' : theme.textSecondary} />
-              <ThemedText style={[styles.navText, { color: isAdmin ? '#F59E0B' : theme.textSecondary }]}>
-                {isAdmin ? 'Administration' : 'Mode Développeur'}
+              <Ionicons name="settings-outline" size={15} color="#F59E0B" />
+              <ThemedText style={[styles.navText, { color: '#F59E0B' }]}>
+                Administration
               </ThemedText>
               <Ionicons name="chevron-forward" size={14} color={theme.textSecondary} style={{ marginLeft: 'auto' }} />
             </Pressable>

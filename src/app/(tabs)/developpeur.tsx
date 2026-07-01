@@ -9,6 +9,7 @@ import { DoubleBezelCard } from '@/components/double-bezel-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Accent, Radii, Shadows, Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth';
 import { useTheme } from '@/hooks/use-theme';
 import {
   adminFetchUsers, adminUpdateUser, adminFetchClubs, adminCreateClub, adminUpdateClub, adminUploadClubLogo, createNotification,
@@ -105,6 +106,24 @@ const tabStyles = StyleSheet.create({
 
 export default function DeveloppeurScreen() {
   const theme = useTheme();
+  const { isAdmin } = useAuth();
+
+  if (!isAdmin) {
+    return (
+      <ThemedView style={styles.screen}>
+        <View style={styles.header}>
+          <View>
+            <ThemedText style={styles.headerTitle}>Administration</ThemedText>
+            <ThemedText style={styles.headerSub}>API : {API_BASE_URL}</ThemedText>
+          </View>
+        </View>
+        <View style={styles.emptyState}>
+          <Ionicons name="lock-closed-outline" size={32} color={theme.textSecondary} />
+          <ThemedText style={styles.emptyText}>Accès réservé aux administrateurs</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
 
   const [activeTab, setActiveTab] = useState<TabName>('users');
   const [loading, setLoading] = useState(false);
@@ -190,8 +209,16 @@ export default function DeveloppeurScreen() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const [uRes, cRes] = await Promise.all([adminFetchUsers(), adminFetchClubs()]);
-    if (uRes.data?.users) setUsers(uRes.data.users);
-    if (cRes.data?.clubs) setClubs(cRes.data.clubs);
+    if (uRes.error) {
+      Alert.alert('Erreur', `Utilisateurs : ${uRes.error}`);
+    } else if (uRes.data?.users) {
+      setUsers(uRes.data.users);
+    }
+    if (cRes.error) {
+      Alert.alert('Erreur', `Clubs : ${cRes.error}`);
+    } else if (cRes.data?.clubs) {
+      setClubs(cRes.data.clubs);
+    }
     setLoading(false);
   }, []);
 

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import fs from 'fs';
 import { config } from './config';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
@@ -12,14 +13,26 @@ import { liveffnRouter } from './liveffn/routes';
 
 const app = express();
 
+// Global error handlers for uncaught rejections/exceptions
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  process.exit(1);
+});
+
+// Ensure upload directories exist
+const uploadsDir = path.join(process.cwd(), 'uploads');
+const clubsDir = path.join(uploadsDir, 'clubs');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(clubsDir)) fs.mkdirSync(clubsDir, { recursive: true });
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-const corsOrigins = config.nodeEnv === 'production'
-  ? ['https://bancalais.fr', 'https://www.bancalais.fr']
-  : ['http://localhost:8081', 'http://192.168.1.60:8081', 'http://localhost:4000'];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || corsOrigins.includes(origin)) {
+    if (!origin || config.corsOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -45,6 +58,22 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(config.port, '0.0.0.0', () => {
-  console.log(`Bancalais API running on http://0.0.0.0:${config.port}`);
+const server = app.listen(config.port, config.host, () => {
+  console.log(`✅ Bancalais API running on http://${config.host}:${config.port} (${config.nodeEnv})`);
 });
+
+// Graceful shutdown for Docker/PM2/systemd
+function gracefulShutdown(signal: string) {
+  console.log(`\n${signal} received — shutting down gracefully...`);
+  const timeout = setTimeout(() => {
+    console.error('⏱️  Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+  server.close(() => {
+    clearTimeout(timeout);
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

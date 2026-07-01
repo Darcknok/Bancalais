@@ -23,7 +23,7 @@ router.post('/', async (req: Request, res: Response) => {
     } = req.body;
 
     if (!competition_id || !event_id || !nageur_iuf) {
-      res.status(400).json({ error: 'competition_id, event_id, nageur_iuf are required' });
+      res.status(400).json({ error: 'competition_id, event_id et nageur_iuf sont requis' });
       return;
     }
 
@@ -50,14 +50,14 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (error) {
       console.error('[feedback] upsert error:', error);
-      res.status(500).json({ error: 'Failed to save feedback' });
+      res.status(500).json({ error: 'Erreur lors de la sauvegarde du feedback' });
       return;
     }
 
     res.json({ feedback: data });
   } catch (err) {
     console.error('[feedback] unexpected error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
@@ -67,7 +67,7 @@ router.get('/', async (req: Request, res: Response) => {
     const { competition_id, event_id, type_tour, nageur_iuf } = req.query;
 
     if (!competition_id || !event_id || !nageur_iuf) {
-      res.status(400).json({ error: 'competition_id, event_id, nageur_iuf are required' });
+      res.status(400).json({ error: 'competition_id, event_id et nageur_iuf sont requis' });
       return;
     }
 
@@ -82,14 +82,14 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (error) {
       console.error('[feedback] get error:', error);
-      res.status(500).json({ error: 'Failed to fetch feedback' });
+      res.status(500).json({ error: 'Erreur lors de la récupération du feedback' });
       return;
     }
 
     res.json({ feedback: data ?? null });
   } catch (err) {
     console.error('[feedback] unexpected error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
@@ -113,14 +113,14 @@ router.get('/swimmer/:nageur_iuf', async (req: Request, res: Response) => {
 
     if (error) {
       console.error('[feedback] list error:', error);
-      res.status(500).json({ error: 'Failed to list feedbacks' });
+      res.status(500).json({ error: 'Erreur lors de la récupération des feedbacks' });
       return;
     }
 
     res.json({ feedbacks: data ?? [] });
   } catch (err) {
     console.error('[feedback] unexpected error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 
@@ -130,7 +130,7 @@ router.delete('/', async (req: Request, res: Response) => {
     const { competition_id, event_id, type_tour, nageur_iuf } = req.body;
 
     if (!competition_id || !event_id || !nageur_iuf) {
-      res.status(400).json({ error: 'competition_id, event_id, nageur_iuf are required' });
+      res.status(400).json({ error: 'competition_id, event_id et nageur_iuf sont requis' });
       return;
     }
 
@@ -144,14 +144,14 @@ router.delete('/', async (req: Request, res: Response) => {
 
     if (error) {
       console.error('[feedback] delete error:', error);
-      res.status(500).json({ error: 'Failed to delete feedback' });
+      res.status(500).json({ error: 'Erreur lors de la suppression du feedback' });
       return;
     }
 
     res.json({ deleted: true });
   } catch (err) {
     console.error('[feedback] unexpected error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Erreur interne du serveur' });
   }
 });
 

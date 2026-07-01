@@ -20,6 +20,7 @@ import {
   type LiveFFNSession,
   type LiveFFNEvent,
   type LiveFFNRaceResult,
+  type ProgramItem,
 } from '@/data/liveffn';
 import { fetchMyPBs } from '@/lib/api';
 
@@ -490,6 +491,38 @@ export default function PlanningScreen() {
     return items;
   }, [filteredDayEpreuves, dayGroups, selectedDay, swimmerResultsMap, swimmerRoundSet, swimmerEventIds]);
 
+  // Items timeline pour le mode non-swimmer (competitions locales)
+  // ATTENTION : ce hook doit être AVANT le early return pour respecter les Règles des Hooks
+  const items = useMemo(() => {
+    const epreuves = comp?.epreuves ?? [];
+    const firstTime = epreuves[0]?.heure || '';
+    const lastTime = epreuves.slice(-1)[0]?.heure || '';
+
+    return [
+      ...(comp?.debut_epreuves || firstTime
+        ? [{ kind: 'event' as const, time: comp?.debut_epreuves ?? firstTime, label: 'Début des épreuves', icon: 'flag' as const }]
+        : []),
+      ...epreuves.map(e => ({
+        kind: 'race' as const,
+        time: e.heure,
+        label: e.nage,
+        epreuve: e,
+      })),
+      ...(comp?.pause
+        ? [{ kind: 'pause' as const, time: '', label: 'Pause ' + comp.pause }]
+        : []),
+      ...(comp?.remise_recompenses || lastTime
+        ? [{ kind: 'event' as const, time: comp?.remise_recompenses ?? lastTime, label: 'Remise des récompenses', icon: 'trophy' as const }]
+        : []),
+    ] as {
+      kind: ItemKind;
+      time: string;
+      label: string;
+      icon?: string;
+      epreuve?: ApiEpreuve;
+    }[];
+  }, [comp]);
+
   if (loading || !comp) {
     return (
       <ThemedView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -499,33 +532,6 @@ export default function PlanningScreen() {
   }
 
   const pbMap = new Map(pbs.map(p => [p.nage.toLowerCase(), p.temps]));
-
-  const firstEpreuveTime = (comp.epreuves ?? [])[0]?.heure || '';
-  const lastEpreuveTime = (comp.epreuves ?? []).slice(-1)[0]?.heure || '';
-
-  const items: {
-    kind: ItemKind;
-    time: string;
-    label: string;
-    icon?: string;
-    epreuve?: ApiEpreuve;
-  }[] = [
-    ...(comp.debut_epreuves || firstEpreuveTime
-      ? [{ kind: 'event' as const, time: comp.debut_epreuves ?? firstEpreuveTime, label: 'Début des épreuves', icon: 'flag' as const }]
-      : []),
-    ...(comp.epreuves ?? []).map(e => ({
-      kind: 'race' as const,
-      time: e.heure,
-      label: e.nage,
-      epreuve: e,
-    })),
-    ...(comp.pause
-      ? [{ kind: 'pause' as const, time: '', label: 'Pause ' + comp.pause }]
-      : []),
-    ...(comp.remise_recompenses || lastEpreuveTime
-      ? [{ kind: 'event' as const, time: comp.remise_recompenses ?? lastEpreuveTime, label: 'Remise des récompenses', icon: 'trophy' as const }]
-      : []),
-  ];
 
   function renderTimelineRow(item: {
     kind: string; time: string; label: string;

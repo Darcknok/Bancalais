@@ -1,62 +1,55 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback, useRef } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
+import { DoubleBezelCard } from '@/components/double-bezel-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import { Radii, Shadows, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { router } from 'expo-router';
 
 export default function HomeScreen() {
+  const theme = useTheme();
+  const tapCount = useRef(0);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePress = useCallback(() => {
+    tapCount.current += 1;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    if (tapCount.current >= 3) {
+      tapCount.current = 0;
+      router.replace('/(tabs)/accueil');
+      return;
+    }
+    tapTimer.current = setTimeout(() => {
+      tapCount.current = 0;
+    }, 800);
+  }, []);
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
+      <Pressable onPress={handlePress} style={styles.tapArea}>
+        <View style={[styles.accentBar, { backgroundColor: theme.text }]} />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+        <View style={styles.content}>
+          <View style={styles.titleBlock}>
+            <View style={[styles.titleDot, { backgroundColor: theme.text }]} />
+            <ThemedText style={[styles.title, { color: theme.text }]}>Bancalais</ThemedText>
+          </View>
+          <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>Natation</ThemedText>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+          <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
+          <DoubleBezelCard style={{ alignSelf: 'stretch', marginHorizontal: Spacing.two }}>
+            <ThemedText style={[styles.message, { color: theme.text }]}>
+              Application en cours de construction
+            </ThemedText>
+            <ThemedText style={[styles.note, { color: theme.textSecondary }]}>
+              Revenez bientôt
+            </ThemedText>
+          </DoubleBezelCard>
+        </View>
+      </Pressable>
     </ThemedView>
   );
 }
@@ -64,35 +57,56 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  tapArea: {
+    flex: 1,
+  },
+  accentBar: {
+    height: 3,
+    opacity: 0.3,
+  },
+  content: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.four,
+  },
+  titleBlock: {
     flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    gap: Spacing.two,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  titleDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   title: {
-    textAlign: 'center',
+    fontSize: 36,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
-  code: {
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 6,
     textTransform: 'uppercase',
+    marginTop: Spacing.one,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  divider: {
+    width: 40,
+    height: 1,
+    marginVertical: Spacing.four,
+  },
+  message: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  note: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 });

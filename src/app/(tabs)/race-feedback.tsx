@@ -107,6 +107,7 @@ export default function RaceFeedbackScreen() {
     await AsyncStorage.setItem(key, JSON.stringify(feedback));
 
     // Try to save to API if we have a nageurIUF
+    let apiFailed = false;
     if (nageurIUF) {
       const iuf = parseInt(nageurIUF, 10);
       if (!isNaN(iuf)) {
@@ -123,13 +124,21 @@ export default function RaceFeedbackScreen() {
         });
         if (error) {
           console.warn('[feedback] save to API failed:', error);
+          apiFailed = true;
         }
       }
     }
 
     setSaving(false);
     setSaved(true);
-    Alert.alert('Enregistré', 'Ton ressenti a bien été sauvegardé.');
+    if (apiFailed) {
+      Alert.alert(
+        'Sauvegardé localement',
+        'La synchronisation avec le serveur a échoué. Tes données sont conservées sur cet appareil.',
+      );
+    } else {
+      Alert.alert('Enregistré', 'Ton ressenti a bien été sauvegardé.');
+    }
   }, [competitionId, eventId, typeTour, nageurIUF, nage, date, feedback]);
 
   const hasContent = feedback.ressenti || feedback.pointsForts || feedback.pointsFaibles;

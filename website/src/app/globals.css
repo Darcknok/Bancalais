@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  --color-text: #1C1917;
+  --color-text-secondary: #8C8882;
+  --color-background: #FAFAF8;
+  --color-background-element: #F5F2ED;
+  --color-background-selected: #EBE7E0;
+  --color-accent: #0EA5E9;
+  --color-accent-dark: #38BDF8;
+  --color-danger: #DC2626;
+  --color-success: #059669;
+  --color-border: #E5E0D8;
+  --color-hairline: rgba(28, 25, 23, 0.06);
+  --color-card-outer: rgba(28, 25, 23, 0.03);
+  --color-ffn-blue: #4AB4E6;
+  --color-ffn-navy: #111F68;
+  --color-ffn-red: #E2061A;
+  --color-crawl: #2563EB;
+  --color-dos: #059669;
+  --color-brass: #D97706;
+  --color-pap: #DB2777;
+
+  --font-sans: system-ui, ui-sans-serif, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-outer: 20px;
+  --radius-full: 9999px;
+
+  --spacing-half: 2px;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blur-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.animate-blur-in {
+  animation: blur-in 0.6s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+.dark body,
+body.dark {
+  --color-text: #F5F4F0;
+  --color-text-secondary: #A8A29E;
+  --color-background: #0F0E0C;
+  --color-background-element: #1C1917;
+  --color-background-selected: #292524;
+  --color-accent: #38BDF8;
+  --color-accent-dark: #0EA5E9;
+  --color-danger: #F87171;
+  --color-success: #34D399;
+  --color-border: #292524;
+  --color-hairline: rgba(245, 244, 240, 0.06);
+  --color-card-outer: rgba(245, 244, 240, 0.02);
+}

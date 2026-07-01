@@ -10,7 +10,13 @@ export const config = {
     return 'fallback-dev-secret-do-not-use-in-prod';
   })(),
   port: parseInt(process.env.PORT ?? '4000', 10),
+  host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  corsOrigins: process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+    : (process.env.NODE_ENV === 'production'
+      ? ['https://bancalais.fr', 'https://www.bancalais.fr']
+      : ['http://localhost:8081', 'http://192.168.1.60:8081', 'http://localhost:4000']),
 };
 
 if (!config.supabaseUrl) throw new Error('SUPABASE_URL is required');

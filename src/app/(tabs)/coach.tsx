@@ -36,6 +36,7 @@ export default function CoachScreen() {
       title: announceTitle.trim(),
       body: announceBody.trim(),
       target_role: 'swimmer',
+      club_id: clubId,
     });
     setSending(false);
     if (error) {
@@ -54,15 +55,17 @@ export default function CoachScreen() {
     return '';
   }, [clubId]);
 
-  const swimmers = useMemo(() => {
+  const swimmers = useMemo((): { id: number; prenom: string; nom: string }[] => {
     if (!clubId) return [];
     // Chat désactivé — la liste des nageurs viendra d'ailleurs plus tard
     return [];
   }, [clubId]);
 
   // Chat désactivé pour le moment
-  const groups: never[] = [];
-  const getGroupParticipants = (_g: never) => [] as never[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groups: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getGroupParticipants = (_g: any) => [] as any[];
 
   const modalOverlay = { flex: 1, justifyContent: 'center' as const, alignItems: 'center' as const, backgroundColor: 'rgba(0,0,0,0.5)', padding: Spacing.four };
   const modalCard = { width: '100%' as const, maxWidth: 400, borderRadius: Radii.lg, padding: Spacing.five, gap: Spacing.three, shadowColor: '#000' as const, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 12 };
