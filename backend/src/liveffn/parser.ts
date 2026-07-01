@@ -738,11 +738,18 @@ export function parseSwimmerResults(html: string): {
     let timeText = $timeTd.text().trim();
     let remark: string | undefined;
 
-    // Parse splits from the time cell (either HTML tooltip or tab-separated text)
+    // Parse splits from tooltip, and extract clean main time
     const splits: LiveFFNSplit[] = [];
     const $timeLink = $timeTd.find('a');
-    const splitHtml = $timeLink.find('b[id="splitAutre"]').html() || $timeLink.find('b').html() || '';
+    const splitHtml = $timeLink.find('b[id="splitAutre"]').html() || '';
+
     if (splitHtml) {
+      // The <a> tag contains the main time as direct text + the <b> with splits.
+      // Clone the <a>, remove <b> children, then get the remaining (clean) text.
+      const cleanTime = $timeLink.clone().children('b').remove().end().text().trim();
+      if (cleanTime) timeText = cleanTime;
+
+      // Parse split table HTML
       const $splitDoc = cheerio.load(`<table>${splitHtml}</table>`);
       $splitDoc('tr').each((_, splitRow) => {
         const $cells = $splitDoc(splitRow).find('td');
@@ -760,7 +767,7 @@ export function parseSwimmerResults(html: string): {
         }
       });
     } else if (timeText.includes('\t')) {
-      // Fallback: parse tab-separated text like "00:58.08\t50 m : 28.31 (28.31)\t100 m : 58.08 (29.77)\t[58.08]"
+      // Fallback: parse tab-separated text
       const parts = timeText.split('\t');
       timeText = parts[0].trim();
       for (let i = 1; i < parts.length; i++) {
