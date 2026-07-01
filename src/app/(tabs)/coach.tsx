@@ -3,6 +3,7 @@ import {
   ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { DoubleBezelCard } from '@/components/double-bezel-card';
 import { ThemedText } from '@/components/themed-text';
@@ -237,6 +238,33 @@ export default function CoachScreen() {
             })}
           </>
         )}
+
+        <View style={styles.sectionHeader}>
+          <Ionicons name="calendar-outline" size={13} color={Accent} />
+          <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            Compétitions
+          </ThemedText>
+          <View style={[styles.sectionLine, { backgroundColor: theme.hairline }]} />
+        </View>
+
+        <DoubleBezelCard accent>
+          <Pressable style={styles.announceRow} onPress={() => router.push('/(tabs)/create-competition' as any)}>
+            <View style={[styles.announceIcon, { backgroundColor: Accent + '18' }]}>
+              <Ionicons name="add-circle" size={20} color={Accent} />
+            </View>
+            <View style={styles.announceTextBlock}>
+              <ThemedText style={[styles.announceTitle, { color: theme.text }]}>
+                Créer une compétition
+              </ThemedText>
+              <ThemedText style={[styles.announceSub, { color: theme.textSecondary }]}>
+                Créez une compétition manuelle avec ses épreuves
+              </ThemedText>
+            </View>
+            <View style={[styles.chevronRing, { borderColor: theme.hairline }]}>
+              <Ionicons name="chevron-forward" size={13} color={theme.textSecondary} />
+            </View>
+          </Pressable>
+        </DoubleBezelCard>
 
         <View style={styles.sectionHeader}>
           <Ionicons name="megaphone-outline" size={13} color={Accent} />
