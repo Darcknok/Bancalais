@@ -45,7 +45,15 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<strin
         );
       }
 
-      return await response.text();
+      // ─── MODIFICATION ICI ───────────────────────────────────────────
+      // Au lieu de response.text(), on récupère les données brutes
+      const buffer = await response.arrayBuffer();
+      
+      // On décode manuellement en utilisant l'encodage historique du site
+      const decoder = new TextDecoder('iso-8859-1');
+      return decoder.decode(buffer);
+      // ────────────────────────────────────────────────────────────────
+      
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
 
@@ -58,6 +66,7 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<strin
 
   throw lastError ?? new LiveFFNFetchError('Max retries exceeded', undefined, url);
 }
+
 
 /** Constructs a LiveFFN URL */
 function liveURL(path: string, params: Record<string, string | number>): string {
