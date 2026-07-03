@@ -134,6 +134,18 @@ function extractStructureFromUrl(url: string | undefined): number | null {
 
 function parseSwimmerName(fullName: string): { lastName: string; firstName: string } {
   const trimmed = fullName.trim();
+  
+  // Cette regex capture tous les mots consécutifs en MAJUSCULES (y compris avec espaces/tirets)
+  const match = trimmed.match(/^([A-ZÀ-ÖØ-ß\s\-]+)\s+(.+)$/);
+  
+  if (match) {
+    return {
+      lastName: match[1].trim(),
+      firstName: match[2].trim()
+    };
+  }
+  
+  // Fallback si le format est bizarre
   const spaceIdx = trimmed.indexOf(' ');
   if (spaceIdx === -1) return { lastName: trimmed, firstName: '' };
   return {
@@ -141,6 +153,7 @@ function parseSwimmerName(fullName: string): { lastName: string; firstName: stri
     firstName: trimmed.substring(spaceIdx + 1).trim(),
   };
 }
+
 
 function parseTimeToMs(time: string): number | null {
   // "00:48.82" or "23.38" or "--:--.--" or "59:59.99"
