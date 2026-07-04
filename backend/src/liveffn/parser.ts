@@ -868,7 +868,7 @@ export function parseClubDetails(html: string): {
   // For now, collect individual swimmer blocks
   $('td.resStructureIndividu1, td.resStructureIndividu2').each((_, td) => {
     const headerText = decodeHtmlEntities($(td).text().trim());
-    const headerMatch = headerText.match(/(\w+)\s+(\w+.*?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
+    const headerMatch = headerText.match(/^([A-ZÀ-ÖØ-ß\s\-]+)\s+(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
     if (headerMatch) {
       const swimmerData: Partial<LiveFFNSwimmer> = {
         lastName: headerMatch[1],
