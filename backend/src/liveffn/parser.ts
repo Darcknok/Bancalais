@@ -348,10 +348,8 @@ export function parseParticipants(html: string): LiveFFNParticipant[] {
     if (!iuf || !fullName) return;
 
     // French format: "NOM Prenom" -> first part is the surname
-    const spaceIdx = fullName.indexOf(' ');
-    const nom = spaceIdx === -1 ? fullName : fullName.substring(0, spaceIdx);
-    const prenom = spaceIdx === -1 ? '' : fullName.substring(spaceIdx + 1).trim();
-
+    const { lastName: nom, firstName: prenom } = parseSwimmerName(fullName);
+    
     const birthYearText = $li.find('.naissance').text().trim();
     const birthYear = parseInt(birthYearText, 10) || 0;
     const nationality = $li.find('.nationalite').text().trim() || 'FRA';
@@ -707,7 +705,7 @@ export function parseSwimmerResults(html: string): {
 
   // Header info: "GABALI Cedric (2004) FRA - CN MARSEILLE"
   const headerText = decodeHtmlEntities($('td.resStructureIndividu1, td.resStructureIndividu2').first().text().trim());
-  const headerMatch = headerText.match(/(\w+)\s+(\w+.*?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
+  const headerMatch = headerText.match(/^([A-ZÀ-ÖØ-ß\s\-]+)\s+(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
   let swimmer: Partial<LiveFFNSwimmer> = {};
   let club: Partial<LiveFFNClub> = {};
 
