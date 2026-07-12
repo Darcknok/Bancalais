@@ -1,15 +1,17 @@
 /**
- * LiveFFN Module - Barrel export
- * 
- * This module provides a complete scraping and caching layer for liveffn.com,
- * the official FFN (Fédération Française de Natation) competition results platform.
- * 
- * Architecture:
- *   fetcher.ts  → HTTP requests to LiveFFN
- *   parser.ts   → HTML → structured data
- *   cache.ts    → In-memory TTL cache
- *   routes.ts   → Express API routes
- *   types.ts    → TypeScript type definitions
+ * Module LiveFFN — Export barrel (réexportation).
+ *
+ * Ce module fournit une couche complète de scraping et cache pour liveffn.com,
+ * la plateforme officielle de résultats de compétitions de la FFN
+ * (Fédération Française de Natation).
+ *
+ * Architecture :
+ *   fetcher.ts    → Requêtes HTTP vers LiveFFN
+ *   parser.ts     → Parsing HTML → données structurées
+ *   cache.ts      → Cache mémoire avec TTL
+ *   persistence.ts → Sauvegarde/lecture en base PostgreSQL
+ *   routes.ts     → Routes API Express
+ *   types.ts      → Définitions de types TypeScript
  */
 
 export * from './types';

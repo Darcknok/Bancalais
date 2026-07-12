@@ -262,7 +262,7 @@ export default function PlanningScreen() {
   const [noId, setNoId] = useState(!id);
   const [participant, setParticipant] = useState<LiveFFNParticipant | null>(null);
   const [swimmerEventIds, setSwimmerEventIds] = useState<number[]>([]);
-  const [swimmerResultsMap, setSwimmerResultsMap] = useState<Map<number, LiveFFNRaceResult>>(new Map());
+  const [swimmerResultsMap, setSwimmerResultsMap] = useState<Map<string, LiveFFNRaceResult>>(new Map());
   const [swimmerRoundSet, setSwimmerRoundSet] = useState<Set<string>>(new Set());
   const [sessions, setSessions] = useState<LiveFFNSession[]>([]);
   const [selectedDay, setSelectedDay] = useState(0);
@@ -318,7 +318,7 @@ export default function PlanningScreen() {
               setSwimmerEventIds(ids);
               // Build map eventId → result for DQ/remark lookup
               const resultsMap = new Map(
-                swimmerRes.data.results.map(r => [r.eventId, r] as [number, LiveFFNRaceResult]),
+                swimmerRes.data.results.map(r => [`${r.eventId}:${r.round}`, r] as [string, LiveFFNRaceResult]),
               );
               setSwimmerResultsMap(resultsMap);
               // Build set of "eventId:round" for precise round matching
@@ -368,7 +368,7 @@ export default function PlanningScreen() {
           const ids = [...new Set(swimmerRes.data.results.map(r => r.eventId))];
           setSwimmerEventIds(ids);
           const resultsMap = new Map(
-            swimmerRes.data.results.map(r => [r.eventId, r] as [number, LiveFFNRaceResult]),
+            swimmerRes.data.results.map(r => [`${r.eventId}:${r.round}`, r] as [string, LiveFFNRaceResult]),
           );
           setSwimmerResultsMap(resultsMap);
           const roundSet = new Set(swimmerRes.data.results.map(r => `${r.eventId}:${r.round}`));
@@ -489,8 +489,8 @@ export default function PlanningScreen() {
         const roundKey = `${e.id}:${e.typeTour || 'Séries'}`;
         const swimmerRaces = swimmerEventIds.includes(e.id) && swimmerRoundSet.has(roundKey);
         if (!swimmerRaces) continue;
-        const matchedResults = swimmerResultsMap.get(e.id);
-        const result = matchedResults && swimmerRoundSet.has(roundKey) ? matchedResults : undefined;
+        const matchedResult = swimmerResultsMap.get(roundKey);
+        const result = matchedResult || undefined;
         const resultTime = (result && result.time !== '--:--.--') ? result.time : undefined;
         const remark = (result?.remark && result.time === '--:--.--') ? result.remark : undefined;
         items.push({
@@ -581,7 +581,7 @@ export default function PlanningScreen() {
           const e = item.epreuve;
           const roundKey = `${e.id}:${e.typeTour || 'Séries'}`;
           if (swimmerEventIds.includes(e.id) && swimmerRoundSet.has(roundKey)) {
-            const result = swimmerResultsMap.get(e.id);
+            const result = swimmerResultsMap.get(roundKey);
             const resultTime = (result && result.time !== '--:--.--') ? cleanTime(result.time) : undefined;
             events.push({
               id: e.id,
@@ -685,8 +685,9 @@ export default function PlanningScreen() {
     const isRace = item.kind === 'race';
     const dqRemark = 'remark' in item ? item.remark : undefined;
     // Récupérer les temps de passage depuis les résultats LiveFFN si disponibles
+    const splitRoundKey = item.epreuve ? `${item.epreuve.id}:${(item as any).typeTour || 'Séries'}` : '';
     const splits = swimmerMode && isRace && item.epreuve
-      ? (swimmerResultsMap.get(item.epreuve.id)?.splits)
+      ? (swimmerResultsMap.get(splitRoundKey)?.splits)
       : undefined;
 
     return (

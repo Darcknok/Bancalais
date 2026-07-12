@@ -69,6 +69,29 @@ function liveFFNEventToApiEpreuve(event: LiveFFNEvent): ApiEpreuve {
   };
 }
 
+/**
+ * Vérifie si les mots du nom d'un utilisateur (prénom + nom combinés)
+ * correspondent à ceux d'un participant LiveFFN.
+ *
+ * La logique concatène prénom et nom des deux côtés et vérifie que
+ * **tous les mots** du côté utilisateur sont présents dans le côté participant.
+ *
+ * Cela permet de gérer les noms composés quelle que soit la répartition
+ * entre prénom et nom (ex: "CALAIS OREFICE Mathias" parsé en nom="CALAIS"
+ * et prenom="OREFICE Mathias" correspondra à un utilisateur enregistré
+ * avec prenom="Mathias" et nom="Calais Orefice").
+ */
+function namesMatch(
+  userPrenom: string, userNom: string,
+  partPrenom: string, partNom: string,
+): boolean {
+  const userWords = (userPrenom + ' ' + userNom)
+    .toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const partWords = (partPrenom + ' ' + partNom)
+    .toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return userWords.length > 0 && userWords.every(w => partWords.includes(w));
+}
+
 function liveFFNSessionToApiEpreuve(session: LiveFFNSession): ApiEpreuve[] {
   return session.epreuves.map(e => ({
     id: e.id,
@@ -93,10 +116,8 @@ async function checkSwimmerInCompetition(
   try {
     const res = await fetchLiveFFNParticipants(compId);
     if (res.error || !res.data?.participants) return false;
-    const prenomLower = prenom.toLowerCase().trim();
-    const nomLower = nom.toLowerCase().trim();
     return res.data.participants.some(
-      p => p.prenom.toLowerCase() === prenomLower && p.nom.toLowerCase() === nomLower,
+      p => namesMatch(prenom, nom, p.prenom, p.nom),
     );
   } catch {
     return false;
@@ -134,9 +155,6 @@ export async function fetchAllCompetitions(
   // Si on a un prénom/nom ET qu'on veut filtrer "Mes compétitions",
   // on vérifie pour chaque compétition LiveFFN si le nageur y est inscrit
   if (filter === 'local' && prenom && nom) {
-    const prenomLower = prenom.toLowerCase().trim();
-    const nomLower = nom.toLowerCase().trim();
-
     // Vérifier les participants en parallèle (max 20 pour éviter les timeouts)
     const toCheck = liveffn.slice(0, 20);
     const results = await Promise.allSettled(
@@ -144,7 +162,7 @@ export async function fetchAllCompetitions(
         fetchLiveFFNParticipants(comp.id).then(res => ({
           compId: comp.id,
           participant: res.data?.participants?.find(
-            p => p.prenom.toLowerCase() === prenomLower && p.nom.toLowerCase() === nomLower,
+            p => namesMatch(prenom, nom, p.prenom, p.nom),
           ) ?? null,
         })),
       ),
@@ -284,9 +302,7 @@ export function findSwimmerByName(
   prenom: string,
   nom: string,
 ): LiveFFNParticipant | undefined {
-  const prenomLower = prenom.toLowerCase().trim();
-  const nomLower = nom.toLowerCase().trim();
   return participants.find(
-    p => p.prenom.toLowerCase() === prenomLower && p.nom.toLowerCase() === nomLower,
+    p => namesMatch(prenom, nom, p.prenom, p.nom),
   );
 }

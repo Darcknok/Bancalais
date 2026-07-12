@@ -1,5 +1,29 @@
+/**
+ * Client API REST pour communiquer avec le serveur backend Bancalais Natation.
+ *
+ * Ce module centralise toutes les communications réseau avec le backend :
+ * - Authentification JWT : stockage sécurisé des tokens (SecureStore/native, localStorage/web)
+ * - Fonctions d'appel API regroupées par domaine :
+ *     • Auth : login, register, getMe, updateMe
+ *     • Clubs : fetchClubs, lookupClub
+ *     • Admin : gestion des utilisateurs, clubs, compétitions, epreuves, PBs
+ *     • Compétitions : liste, détail, inscription/désinscription aux épreuves
+ *     • Notifications : liste, lecture, compteur, création, suppression
+ *     • PBs (Personal Bests) : consultation et gestion des temps personnels
+ *     • Feedback : ressenti nageur après compétition
+ *     • Monitoring : statut du serveur (CPU, RAM, batterie)
+ *
+ * Architecture :
+ *   - Fonction générique apiFetch<T>() : gère headers, timeout, erreurs
+ *   - Stockage cross-platform du token via l'objet storage (SecureStore + localStorage)
+ *   - Toutes les fonctions retournent { data?: T; error?: string }
+ *   - Le timeout par défaut est de 10 secondes
+ */
+
 import type { UserRole } from '@/data/auth';
 import { Platform } from 'react-native';
+
+// --- Configuration ---
 
 const TOKEN_KEY = 'bancalais_jwt';
 
@@ -9,7 +33,9 @@ const DEV_API_HOST = process.env.EXPO_PUBLIC_API_HOST || 'bancalais.freeboxos.fr
 
 export const API_BASE_URL = `http://${DEV_API_HOST}:4000`;
 
-// Cross-platform storage : SecureStore sur native, localStorage sur web
+// --- Stockage cross-platform du token JWT ---
+// SecureStore sur les plateformes natives (iOS/Android), localStorage sur web
+// Import dynamique pour éviter les erreurs côté serveur ou en environnement non supporté
 const storage = {
   async get(key: string): Promise<string | null> {
     try {
@@ -37,6 +63,8 @@ const storage = {
   },
 };
 
+// --- Helpers de gestion du token JWT ---
+
 export async function getToken(): Promise<string | null> {
   return storage.get(TOKEN_KEY);
 }
@@ -49,12 +77,17 @@ export async function removeToken() {
   await storage.remove(TOKEN_KEY);
 }
 
+// --- Fonction utilitaire : timeout pour les requêtes API ---
+// Rejette avec un message explicite si le serveur ne répond pas à temps
 function timeoutPromise(ms: number) {
   return new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error('Connexion au serveur impossible (délai dépassé)')), ms);
   });
 }
 
+// --- Fonction générique d'appel API ---
+// Gère automatiquement : en-tête Content-Type, token JWT d'authentification,
+// timeout configurable, parsing JSON, et gestion des erreurs HTTP/réseau.
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -65,11 +98,13 @@ async function apiFetch<T>(
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+  // Ajouter le token d'authentification si disponible
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
   try {
+    // Course entre la requête fetch et le timeout
     const res = await Promise.race([
       fetch(`${API_BASE_URL}${path}`, { ...options, headers }),
       timeoutPromise(timeoutMs),
@@ -88,6 +123,8 @@ async function apiFetch<T>(
   }
 }
 
+// --- Types API : Profil utilisateur ---
+// Format snake_case tel que retourné par le backend
 export type ApiProfile = {
   id: number;
   email: string;
@@ -104,6 +141,7 @@ export type ApiProfile = {
   event_notifications: boolean;
   mention_notifications: boolean;
   invite_notifications: boolean;
+  reminder_delay?: number;
 };
 
 export type LoginResponse = {
@@ -119,6 +157,10 @@ export type RegisterBody = {
   role: UserRole;
   referral_code?: string;
 };
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH : inscription, connexion, profil utilisateur
+// ═══════════════════════════════════════════════════════════════
 
 export async function loginAPI(email: string, password: string) {
   return apiFetch<LoginResponse>('/api/auth/login', {
@@ -145,6 +187,7 @@ export async function updateMe(data: Record<string, unknown>) {
   });
 }
 
+// --- Types API : Clubs ---
 export type ApiClub = {
   id: number;
   name: string;
@@ -154,15 +197,22 @@ export type ApiClub = {
   referral_active: boolean;
 };
 
+// ═══════════════════════════════════════════════════════════════
+// CLUBS : recherche et consultation
+// ═══════════════════════════════════════════════════════════════
+
 export async function fetchClubs() {
   return apiFetch<{ clubs: ApiClub[] }>('/api/auth/clubs');
 }
 
+// Recherche d'un club par son code de parrainage
 export async function lookupClub(code: string) {
   return apiFetch<{ club: ApiClub }>(`/api/auth/club/${encodeURIComponent(code)}`);
 }
 
-// --- Admin endpoints ---
+// ═══════════════════════════════════════════════════════════════
+// ADMIN : gestion des utilisateurs
+// ═══════════════════════════════════════════════════════════════
 
 export async function adminFetchUsers() {
   return apiFetch<{ users: ApiProfile[] }>('/api/admin/users');
@@ -178,6 +228,10 @@ export async function adminUpdateUser(id: number, data: Record<string, unknown>)
     body: JSON.stringify(data),
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN : gestion des clubs
+// ═══════════════════════════════════════════════════════════════
 
 export async function adminFetchClubs() {
   return apiFetch<{ clubs: ApiClub[] }>('/api/admin/clubs');
@@ -197,6 +251,11 @@ export async function adminUpdateClub(id: number, data: Record<string, unknown>)
   });
 }
 
+/**
+ * Upload du logo d'un club — gestion spécifique du FormData
+ * Différencie le comportement web (Blob) et natif (uri) pour l'upload d'image.
+ * Timeout étendu à 15 secondes pour les uploads.
+ */
 export async function adminUploadClubLogo(id: number, uri: string) {
   const token = await getToken();
   const formData = new FormData();
@@ -205,10 +264,12 @@ export async function adminUploadClubLogo(id: number, uri: string) {
   const mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
 
   if (Platform.OS === 'web') {
+    // Sur web, récupérer le blob depuis l'URI
     const resp = await fetch(uri);
     const blob = await resp.blob();
     formData.append('logo', blob, filename);
   } else {
+    // Sur natif, passer directement l'objet avec uri/name/type
     formData.append('logo', { uri, name: filename, type: mime } as any);
   }
 
@@ -229,8 +290,11 @@ export async function adminUploadClubLogo(id: number, uri: string) {
   }
 }
 
-// --- Competitions ---
+// ═══════════════════════════════════════════════════════════════
+// COMPÉTITIONS : épreuves et inscriptions
+// ═══════════════════════════════════════════════════════════════
 
+// Types pour les épreuves de compétition
 export type ApiEpreuve = {
   id: number;
   competition_id: number;
@@ -257,14 +321,17 @@ export type ApiCompetition = {
   created_at: string;
 };
 
+// Liste de toutes les compétitions
 export async function fetchCompetitions() {
   return apiFetch<{ competitions: ApiCompetition[] }>('/api/competitions');
 }
 
+// Détail d'une compétition spécifique avec ses épreuves
 export async function fetchCompetition(id: number) {
   return apiFetch<{ competition: ApiCompetition }>(`/api/competitions/${id}`);
 }
 
+// Inscription à une épreuve (avec temps d'engagement optionnel)
 export async function inscrireEpreuve(competitionId: number, epreuve_id: number, temps_engagement?: string) {
   return apiFetch<{ inscription: { id: number } }>(`/api/competitions/${competitionId}/inscrire`, {
     method: 'POST',
@@ -272,6 +339,7 @@ export async function inscrireEpreuve(competitionId: number, epreuve_id: number,
   });
 }
 
+// Désinscription d'une épreuve
 export async function desinscrireEpreuve(competitionId: number, epreuve_id: number) {
   return apiFetch<{ success: boolean }>(`/api/competitions/${competitionId}/desinscrire`, {
     method: 'DELETE',
@@ -279,8 +347,11 @@ export async function desinscrireEpreuve(competitionId: number, epreuve_id: numb
   });
 }
 
-// --- Admin Competitions ---
+// ═══════════════════════════════════════════════════════════════
+// ADMIN : gestion des compétitions et épreuves
+// ═══════════════════════════════════════════════════════════════
 
+// Type pour les inscriptions aux compétitions (côté admin)
 export type ApiCompetitionInscription = {
   id: number;
   swimmer: { id: number; prenom: string; nom: string; email: string; club_id: number | null };
@@ -289,6 +360,7 @@ export type ApiCompetitionInscription = {
   created_at: string;
 };
 
+// Création d'une nouvelle compétition
 export async function adminCreateCompetition(data: {
   lieu: string; date: string; ouverture_portes?: string; debut_epreuves?: string;
   engagements?: string; pause?: string; remise_recompenses?: string;
@@ -298,38 +370,49 @@ export async function adminCreateCompetition(data: {
   });
 }
 
+// Mise à jour d'une compétition existante
 export async function adminUpdateCompetition(id: number, data: Record<string, unknown>) {
   return apiFetch<{ competition: ApiCompetition }>(`/api/admin/competitions/${id}`, {
     method: 'PATCH', body: JSON.stringify(data),
   });
 }
 
+// Suppression d'une compétition
 export async function adminDeleteCompetition(id: number) {
   return apiFetch<{ success: boolean }>(`/api/admin/competitions/${id}`, { method: 'DELETE' });
 }
 
+// --- Gestion des épreuves (CRUD) ---
+
+// Création d'une épreuve dans une compétition
 export async function adminCreateEpreuve(competitionId: number, data: { heure?: string; nage: string; type_nage: string; ordre: number }) {
   return apiFetch<{ epreuve: ApiEpreuve }>(`/api/admin/competitions/${competitionId}/epreuves`, {
     method: 'POST', body: JSON.stringify(data),
   });
 }
 
+// Mise à jour d'une épreuve
 export async function adminUpdateEpreuve(id: number, data: Record<string, unknown>) {
   return apiFetch<{ epreuve: ApiEpreuve }>(`/api/admin/competitions/epreuves/${id}`, {
     method: 'PATCH', body: JSON.stringify(data),
   });
 }
 
+// Suppression d'une épreuve
 export async function adminDeleteEpreuve(id: number) {
   return apiFetch<{ success: boolean }>(`/api/admin/competitions/epreuves/${id}`, { method: 'DELETE' });
 }
 
+// Consultation des inscriptions à une compétition (côté admin)
 export async function adminFetchInscriptions(competitionId: number) {
   return apiFetch<{ inscriptions: ApiCompetitionInscription[] }>(`/api/admin/competitions/${competitionId}/inscriptions`);
 }
 
-// --- Notifications ---
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATIONS : consultation, marquage, création
+// ═══════════════════════════════════════════════════════════════
 
+// Types pour les notifications
 export type ApiNotification = {
   id: number;
   type: 'coach' | 'system' | 'reminder';
@@ -343,10 +426,12 @@ export type ApiNotification = {
   created_at: string;
 };
 
+// Récupérer toutes les notifications de l'utilisateur
 export async function fetchNotifications() {
   return apiFetch<{ notifications: ApiNotification[] }>('/api/notifications');
 }
 
+// Marquer une notification comme lue
 export async function markNotificationRead(id: number) {
   return apiFetch<{ success: boolean }>('/api/notifications/read', {
     method: 'POST',
@@ -354,16 +439,19 @@ export async function markNotificationRead(id: number) {
   });
 }
 
+// Marquer toutes les notifications comme lues
 export async function markAllNotificationsRead() {
   return apiFetch<{ success: boolean }>('/api/notifications/read-all', {
     method: 'POST',
   });
 }
 
+// Récupérer le compteur de notifications non lues (pour le badge)
 export async function fetchUnreadCount() {
   return apiFetch<{ count: number }>('/api/notifications/unread-count');
 }
 
+// Créer une nouvelle notification (coach, système ou rappel)
 export async function createNotification(data: {
   type: 'coach' | 'system' | 'reminder';
   title: string;
@@ -378,13 +466,16 @@ export async function createNotification(data: {
   });
 }
 
+// Supprimer une notification
 export async function deleteNotification(id: number) {
   return apiFetch<{ success: boolean }>(`/api/notifications/${id}`, {
     method: 'DELETE',
   });
 }
 
-// --- PBs ---
+// ═══════════════════════════════════════════════════════════════
+// PBs (Personal Bests) : temps personnels des nageurs
+// ═══════════════════════════════════════════════════════════════
 
 export type ApiPB = {
   id: number;
@@ -396,14 +487,19 @@ export type ApiPB = {
   updated_at: string;
 };
 
+// Récupérer les PBs de l'utilisateur connecté
 export async function fetchMyPBs() {
   return apiFetch<{ pbs: ApiPB[] }>('/api/auth/pbs');
 }
 
+// --- Fonctions admin pour la gestion des PBs ---
+
+// Récupérer les PBs d'un nageur spécifique (admin)
 export async function adminFetchPBs(userId: number) {
   return apiFetch<{ pbs: ApiPB[] }>(`/api/admin/pbs/${userId}`);
 }
 
+// Créer ou mettre à jour un PB (upsert) pour un nageur
 export async function adminUpsertPB(userId: number, data: { nage: string; type_nage: string; temps: string }) {
   return apiFetch<{ pb: ApiPB }>(`/api/admin/pbs/${userId}`, {
     method: 'POST',
@@ -411,6 +507,7 @@ export async function adminUpsertPB(userId: number, data: { nage: string; type_n
   });
 }
 
+// Modifier un PB existant
 export async function adminUpdatePB(pbId: number, data: { nage?: string; type_nage?: string; temps?: string }) {
   return apiFetch<{ pb: ApiPB }>(`/api/admin/pbs/${pbId}`, {
     method: 'PATCH',
@@ -418,13 +515,18 @@ export async function adminUpdatePB(pbId: number, data: { nage?: string; type_na
   });
 }
 
+// Supprimer un PB
 export async function adminDeletePB(pbId: number) {
   return apiFetch<{ success: boolean }>(`/api/admin/pbs/${pbId}`, {
     method: 'DELETE',
   });
 }
 
-// ─── Feedback (ressenti nageur) ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// FEEDBACK : ressenti nageur après compétition
+// ═══════════════════════════════════════════════════════════════
+// Les nageurs peuvent soumettre un feedback sur leur ressenti
+// lors d'un tour de compétition (points forts, axes d'amélioration)
 
 export type ApiFeedback = {
   id: number;
@@ -441,6 +543,7 @@ export type ApiFeedback = {
   updated_at: string;
 };
 
+// Enregistrer un feedback de nageur pour une épreuve
 export async function saveFeedback(data: {
   competition_id: number;
   event_id: number;
@@ -458,6 +561,7 @@ export async function saveFeedback(data: {
   });
 }
 
+// Récupérer le feedback d'un nageur pour une épreuve spécifique
 export async function fetchFeedback(params: {
   competition_id: number;
   event_id: number;
@@ -473,7 +577,42 @@ export async function fetchFeedback(params: {
   return apiFetch<{ feedback: ApiFeedback | null }>(`/api/feedback?${qs.toString()}`);
 }
 
+// Récupérer tous les feedbacks d'un nageur, optionnellement filtrés par compétition
 export async function fetchSwimmerFeedbacks(nageurIUF: number, competition_id?: number) {
   const qs = competition_id ? `?competition_id=${competition_id}` : '';
   return apiFetch<{ feedbacks: ApiFeedback[] }>(`/api/feedback/swimmer/${nageurIUF}${qs}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MONITORING : statut du serveur backend
+// ═══════════════════════════════════════════════════════════════
+// Utilisé par l'onglet Serveur (admin uniquement) pour surveiller
+// l'état du serveur : CPU, RAM, uptime, source d'alimentation
+
+export type ServerPowerStatus = {
+  source: 'ac' | 'battery' | 'unknown';
+  batteryPercent?: number;
+  batteryRemainingMin?: number;
+  label: string;
+};
+
+export type ServerStatus = {
+  timestamp: string;
+  hostname: string;
+  platform: string;
+  arch: string;
+  release: string;
+  systemUptime: number;
+  processUptime: number;
+  loadAverage: number[];
+  cpuCount: number;
+  totalMem: number;
+  freeMem: number;
+  memUsagePercent: number;
+  power: ServerPowerStatus;
+};
+
+// Récupérer le statut en temps réel du serveur
+export async function fetchServerStatus() {
+  return apiFetch<ServerStatus>('/api/server/status');
 }

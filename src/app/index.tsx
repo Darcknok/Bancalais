@@ -1,10 +1,9 @@
 import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { DoubleBezelCard } from '@/components/double-bezel-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Radii, Shadows, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { router } from 'expo-router';
 
@@ -40,14 +39,9 @@ export default function HomeScreen() {
 
           <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
 
-          <DoubleBezelCard style={{ alignSelf: 'stretch', marginHorizontal: Spacing.two }}>
-            <ThemedText style={[styles.message, { color: theme.text }]}>
-              Application en cours de construction
-            </ThemedText>
-            <ThemedText style={[styles.note, { color: theme.textSecondary }]}>
-              Revenez bientôt
-            </ThemedText>
-          </DoubleBezelCard>
+          <ThemedText style={[styles.instruction, { color: theme.textSecondary }]}>
+            Touchez 3 fois pour continuer
+          </ThemedText>
         </View>
       </Pressable>
     </ThemedView>
@@ -98,15 +92,10 @@ const styles = StyleSheet.create({
     height: 1,
     marginVertical: Spacing.four,
   },
-  message: {
-    fontSize: 14,
+  instruction: {
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 22,
     fontWeight: '500',
-  },
-  note: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    textAlign: 'center',
+    opacity: 0.6,
   },
 });

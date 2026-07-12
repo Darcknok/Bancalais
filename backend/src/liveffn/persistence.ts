@@ -1,3 +1,14 @@
+/**
+ * Persistence layer for LiveFFN scraped data.
+ *
+ * Chaque fonction respecte le pattern :
+ * 1. Vérifier si la donnée existe déjà en DB
+ * 2. Si oui → comparer le hash pour détecter les changements
+ * 3. Si changé → UPDATE ; si identique → SKIP (pas d'écriture inutile)
+ * 4. Si n'existe pas → INSERT
+ */
+
+import * as crypto from 'crypto';
 import { supabase } from '../supabase';
 import type {
   LiveFFNCompetition,
@@ -11,13 +22,9 @@ import type {
 
 function parseDistanceNage(nom: string): { distance: number | null; nage: string | null } {
   const match = nom.match(/^(\d+)\s+(.+?)\s+(?:Messieurs|Dames|Femmes|Hommes|MIX)/);
-  if (match) {
-    return { distance: parseInt(match[1], 10), nage: match[2].trim() };
-  }
+  if (match) return { distance: parseInt(match[1], 10), nage: match[2].trim() };
   const fallback = nom.match(/^(\d+)\s+(.+)/);
-  if (fallback) {
-    return { distance: parseInt(fallback[1], 10), nage: fallback[2].trim() };
-  }
+  if (fallback) return { distance: parseInt(fallback[1], 10), nage: fallback[2].trim() };
   return { distance: null, nage: null };
 }
 
@@ -31,22 +38,250 @@ function getListCacheNom(page: string): string {
     : 'Liste des compétitions courantes';
 }
 
-// ─── Competition list (stored as sentinel rows in liveffn_competitions) ───
+// ─── Hash computation ───────────────────────────────────────────
+
+/**
+ * Calcule un hash MD5 des champs "changeables" d'un objet.
+ * Deux objets avec les mêmes données produiront le même hash.
+ */
+function computeHash(obj: Record<string, unknown>, fields: string[]): string {
+  const payload = fields.map(f => String(obj[f] ?? '')).join('|');
+  return crypto.createHash('md5').update(payload).digest('hex');
+}
+
+// ─── Generic upsert with change detection ───────────────────────
+
+type UpsertConfig<T extends Record<string, unknown>> = {
+  /** Nom de la table Supabase */
+  table: string;
+  /** Colonne(s) de conflit pour l'upsert */
+  conflictColumns: string | string[];
+  /** Champs à inclure dans le hash de changement (ceux qui peuvent évoluer) */
+  changeFields: (keyof T)[];
+  /** Fonction pour extraire la clé unique d'une ligne (utile pour la query de hash existants) */
+  extractKey: (row: T) => Record<string, unknown>;
+  /** Taille max des batches pour l'insertion */
+  batchSize?: number;
+};
+
+/**
+ * Upsert intelligent avec détection de changement.
+ *
+ * 1. Calcule le hash des champs "changeables" pour chaque ligne
+ * 2. Récupère les hash existants en DB
+ * 3. Filtre : garde seulement les lignes NEW ou CHANGED
+ * 4. Upsert uniquement celles-ci
+ *
+ * Retourne le nombre de lignes effectivement écrites.
+ */
+async function upsertWithDiff<T extends Record<string, unknown>>(
+  rows: T[],
+  config: UpsertConfig<T>,
+): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const { table, conflictColumns, changeFields } = config;
+  const conflictCols = Array.isArray(conflictColumns) ? conflictColumns : [conflictColumns];
+
+  // 1. Calculer le hash pour chaque ligne
+  const rowsWithHash = rows.map(row => {
+    const hash = computeHash(row as Record<string, unknown>, changeFields as string[]);
+    return { ...row, data_hash: hash };
+  });
+
+  // 2. Récupérer les hash existants
+  const keys = rowsWithHash.map(r => config.extractKey(r));
+  const existingMap = await fetchExistingHashes(table, conflictCols, keys);
+
+  // 3. Filtrer : garder seulement les nouvelles lignes ou celles dont le hash a changé
+  const toUpsert: typeof rowsWithHash = [];
+  let skipped = 0;
+
+  for (const row of rowsWithHash) {
+    const key = config.extractKey(row);
+    const existingHash = existingMap.get(serializeKey(key, conflictCols));
+    if (existingHash === row.data_hash) {
+      skipped++;
+      continue; // Identique → skip
+    }
+    toUpsert.push(row);
+  }
+
+  if (toUpsert.length === 0) {
+    console.log(`[persistence] ${table}: ${rows.length} lignes, toutes identiques — 0 écriture`);
+    return 0;
+  }
+
+  // 4. Upsert par batches
+  const batchSize = config.batchSize ?? 50;
+  let written = 0;
+
+  for (let i = 0; i < toUpsert.length; i += batchSize) {
+    const batch = toUpsert.slice(i, i + batchSize);
+    const conflictString = conflictCols.join(',');
+    const { error } = await supabase
+      .from(table)
+      .upsert(batch as any, {
+        onConflict: conflictString,
+        ignoreDuplicates: false,
+      });
+
+    if (error) {
+      console.error(`[persistence] ${table} upsert error (batch ${i}):`, error.message);
+    } else {
+      written += batch.length;
+    }
+  }
+
+  console.log(`[persistence] ${table}: ${toUpsert.length} écrites / ${rows.length} total (${skipped} identiques sautées)`);
+  return written;
+}
+
+/**
+ * Récupère les hash existants pour un ensemble de clés.
+ * Retourne une Map<"col1|col2|...", hash>
+ */
+async function fetchExistingHashes(
+  table: string,
+  conflictCols: string[],
+  keys: Record<string, unknown>[],
+): Promise<Map<string, string>> {
+  if (keys.length === 0) return new Map();
+
+  // Construire une requête OR pour toutes les clés
+  // (plus performant que N requêtes individuelles)
+  const result = new Map<string, string>();
+
+  // Pour les tables avec une PK simple (id), on peut faire un IN
+  if (conflictCols.length === 1 && conflictCols[0] === 'id') {
+    const ids = keys.map(k => Number(k.id)).filter(id => !isNaN(id) && id > 0);
+    if (ids.length === 0) return result;
+
+    // Batch par lots de 50
+    for (let i = 0; i < ids.length; i += 50) {
+      const batch = ids.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from(table)
+        .select('id, data_hash')
+        .in('id', batch);
+
+      if (error) {
+        console.error(`[persistence] fetchExistingHashes(${table}) error:`, error.message);
+        continue;
+      }
+      if (data) {
+        for (const row of data) {
+          result.set(String(row.id), row.data_hash ?? '');
+        }
+      }
+    }
+    return result;
+  }
+
+  // Pour les clés composites (epreuve_id, round, nageur_iuf)
+  // On doit faire des requêtes individuelles ou utiliser une approche OR
+  // Approche : requête pour chaque clé (batch quand même)
+  const uniqueKeys = new Map<string, Record<string, unknown>>();
+  for (const k of keys) {
+    const sk = serializeKey(k, conflictCols);
+    if (!uniqueKeys.has(sk)) uniqueKeys.set(sk, k);
+  }
+
+  const keyArray = Array.from(uniqueKeys.values());
+
+  // Supabase ne supporte pas les OR complexes facilement, on va groupe par
+  // les colonnes fixes (epreuve_id) et utiliser IN
+  if (conflictCols[0] === 'epreuve_id') {
+    // Grouper par epreuve_id
+    const byEpreuve = new Map<number, Record<string, unknown>[]>();
+    for (const k of keyArray) {
+      const eid = Number(k.epreuve_id);
+      if (!isNaN(eid)) {
+        if (!byEpreuve.has(eid)) byEpreuve.set(eid, []);
+        byEpreuve.get(eid)!.push(k);
+      }
+    }
+
+    for (const [epreuveId, kk] of byEpreuve) {
+      const { data, error } = await supabase
+        .from(table)
+        .select('epreuve_id, round, nageur_iuf, data_hash')
+        .eq('epreuve_id', epreuveId);
+
+      if (error) {
+        console.error(`[persistence] fetchExistingHashes(${table}) error:`, error.message);
+        continue;
+      }
+      if (data) {
+        for (const row of data) {
+          const sk = serializeKey({ epreuve_id: row.epreuve_id, round: row.round, nageur_iuf: row.nageur_iuf }, conflictCols);
+          result.set(sk, row.data_hash ?? '');
+        }
+      }
+    }
+    return result;
+  }
+
+  // Fallback : petite table, on récupère tout
+  const { data, error } = await supabase
+    .from(table)
+    .select(`data_hash, ${conflictCols.join(', ')}`);
+
+  if (error) {
+    console.error(`[persistence] fetchExistingHashes(${table}) fallback error:`, error.message);
+    return result;
+  }
+  if (data) {
+    for (const row of data) {
+      const key: Record<string, unknown> = {};
+      for (const col of conflictCols) {
+        key[col] = row[col];
+      }
+      const sk = serializeKey(key, conflictCols);
+      result.set(sk, row.data_hash ?? '');
+    }
+  }
+  return result;
+}
+
+function serializeKey(key: Record<string, unknown>, cols: string[]): string {
+  return cols.map(c => String(key[c] ?? '')).join('|');
+}
+
+// ─── Competition list ───────────────────────────────────────────
 
 export async function saveCompetitionListToDB(page: string, competitions: LiveFFNCompetition[]): Promise<void> {
   const id = getListCacheId(page);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const rawJson = JSON.parse(JSON.stringify(competitions));
+  const hash = computeHash({ raw_json: JSON.stringify(rawJson) }, ['raw_json']);
+
+  // Vérifier si la liste a changé
+  const { data: existing } = await supabase
+    .from('liveffn_competitions')
+    .select('data_hash')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (existing && existing.data_hash === hash) {
+    console.log(`[persistence] Competition list "${page}" unchanged, skipping`);
+    return;
+  }
+
   const { error } = await supabase
     .from('liveffn_competitions')
     .upsert({
       id,
       nom: getListCacheNom(page),
       ville: '',
-      raw_json: JSON.parse(JSON.stringify(competitions)),
+      raw_json: rawJson,
+      data_hash: hash,
       expires_at: expiresAt,
       fetched_at: new Date().toISOString(),
     }, { onConflict: 'id' });
+
   if (error) console.error('[persistence] saveCompetitionListToDB error:', error.message);
+  else console.log(`[persistence] Competition list "${page}" saved (${competitions.length} comps)`);
 }
 
 export async function getCompetitionListFromDB(page: string): Promise<LiveFFNCompetition[] | null> {
@@ -69,6 +304,21 @@ export async function getCompetitionListFromDB(page: string): Promise<LiveFFNCom
 
 export async function saveCompetitionToDB(comp: LiveFFNCompetitionDetail & { id: number }): Promise<void> {
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const rawJson = JSON.parse(JSON.stringify(comp));
+  const hash = computeHash(rawJson, ['name', 'location', 'poolLength', 'startDate', 'endDate', 'posterUrl']);
+
+  // Vérifier si le détail a changé
+  const { data: existing } = await supabase
+    .from('liveffn_competitions')
+    .select('data_hash')
+    .eq('id', comp.id)
+    .maybeSingle();
+
+  if (existing && existing.data_hash === hash) {
+    console.log(`[persistence] Competition ${comp.id} unchanged, skipping`);
+    return;
+  }
+
   const { error } = await supabase
     .from('liveffn_competitions')
     .upsert({
@@ -78,11 +328,14 @@ export async function saveCompetitionToDB(comp: LiveFFNCompetitionDetail & { id:
       bassin: comp.poolLength || null,
       date_debut: comp.startDate || null,
       date_fin: comp.endDate || null,
-      raw_json: JSON.parse(JSON.stringify(comp)),
+      raw_json: rawJson,
+      data_hash: hash,
       expires_at: expiresAt,
       fetched_at: new Date().toISOString(),
     }, { onConflict: 'id' });
+
   if (error) console.error(`[persistence] saveCompetitionToDB(${comp.id}) error:`, error.message);
+  else console.log(`[persistence] Competition ${comp.id} saved`);
 }
 
 export async function getCompetitionFromDB(id: number): Promise<LiveFFNCompetitionDetail | null> {
@@ -102,8 +355,30 @@ export async function getCompetitionFromDB(id: number): Promise<LiveFFNCompetiti
 
 // ─── Events (epreuves) ──────────────────────────────────────────
 
-export async function saveEventToDB(event: LiveFFNEvent & { competitionId: number; sessionDate?: string; sessionNum?: number }): Promise<void> {
+type EventRow = LiveFFNEvent & {
+  competitionId: number;
+  sessionDate?: string;
+  sessionNum?: number;
+};
+
+export async function saveEventToDB(event: EventRow): Promise<void> {
   const { distance, nage } = parseDistanceNage(event.nom);
+  const hash = computeHash(event as unknown as Record<string, unknown>, [
+    'nom', 'heure', 'genre', 'typeTour', 'nbSeries', 'nbParticipants',
+  ]);
+
+  // Vérifier si l'épreuve a changé
+  const { data: existing } = await supabase
+    .from('liveffn_epreuves')
+    .select('data_hash')
+    .eq('id', event.id)
+    .maybeSingle();
+
+  if (existing && existing.data_hash === hash) {
+    console.log(`[persistence] Event ${event.id} unchanged, skipping`);
+    return;
+  }
+
   const { error } = await supabase
     .from('liveffn_epreuves')
     .upsert({
@@ -117,16 +392,41 @@ export async function saveEventToDB(event: LiveFFNEvent & { competitionId: numbe
       session_num: event.sessionNum || null,
       heure_debut: event.heure || null,
       raw_json: JSON.parse(JSON.stringify(event)),
+      data_hash: hash,
     }, { onConflict: 'id' });
+
   if (error) console.error(`[persistence] saveEventToDB(${event.id}) error:`, error.message);
 }
 
 // ─── Results ────────────────────────────────────────────────────
 
+type ResultRow = {
+  epreuve_id: number;
+  round: string;
+  place: string;
+  temps: string;
+  nageur_nom: string | null;
+  nageur_prenom: string | null;
+  nageur_iuf: number | null;
+  club_nom: string | null;
+  club_id: number | null;
+  points: number | null;
+  reaction: string | null;
+  remarque: string | null;
+  splits_json: Record<string, unknown> | null;
+  raw_json: Record<string, unknown>;
+  data_hash?: string;
+};
+
+/**
+ * Sauvegarde les résultats avec détection de changement.
+ * Utilise la contrainte unique (epreuve_id, round, nageur_iuf) pour
+ * identifier chaque ligne, et compare le hash avant d'écrire.
+ */
 export async function saveResultsToDB(eventId: number, results: LiveFFNRaceResult[]): Promise<void> {
-  const rows = results.map(r => ({
+  const rows: ResultRow[] = results.map(r => ({
     epreuve_id: eventId,
-    round: r.round,
+    round: r.round || 'Séries',
     place: r.place,
     temps: r.time,
     nageur_nom: r.swimmer?.lastName || null,
@@ -140,15 +440,27 @@ export async function saveResultsToDB(eventId: number, results: LiveFFNRaceResul
     splits_json: r.splits ? JSON.parse(JSON.stringify(r.splits)) : null,
     raw_json: JSON.parse(JSON.stringify(r)),
   }));
-  const { error } = await supabase
-    .from('liveffn_resultats')
-    .upsert(rows, {
-      onConflict: 'id',
-      ignoreDuplicates: false,
-    });
-  if (error) console.error(`[persistence] saveResultsToDB(${eventId}) error:`, error.message);
+
+  const written = await upsertWithDiff(rows, {
+    table: 'liveffn_resultats',
+    conflictColumns: ['epreuve_id', 'round', 'nageur_iuf'],
+    changeFields: ['temps', 'place', 'points', 'reaction', 'remarque', 'splits_json'],
+    extractKey: (row: ResultRow) => ({
+      epreuve_id: row.epreuve_id,
+      round: row.round ?? '',
+      nageur_iuf: row.nageur_iuf ?? 0,
+    }),
+    batchSize: 50,
+  });
+
+  if (written > 0) {
+    console.log(`[persistence] Résultats épreuve ${eventId}: ${written} lignes écrites`);
+  }
 }
 
+/**
+ * Récupère les résultats d'une épreuve depuis la DB.
+ */
 export async function getEventResultsFromDB(eventId: number): Promise<{
   name: string;
   gender: Genre;
@@ -157,8 +469,8 @@ export async function getEventResultsFromDB(eventId: number): Promise<{
   const { data, error } = await supabase
     .from('liveffn_resultats')
     .select('*')
-    .eq('epreuve_id', eventId)
-    .order('fetched_at', { ascending: false });
+    .eq('epreuve_id', eventId);
+
   if (error) {
     console.error(`[persistence] getEventResultsFromDB(${eventId}) error:`, error.message);
     return null;
@@ -195,9 +507,7 @@ export async function getEventResultsFromDB(eventId: number): Promise<{
     };
 
     const roundName = row.round || 'Séries';
-    if (!byRound.has(roundName)) {
-      byRound.set(roundName, []);
-    }
+    if (!byRound.has(roundName)) byRound.set(roundName, []);
     byRound.get(roundName)!.push(result);
   }
 
@@ -225,15 +535,6 @@ export async function clearExpiredCache(): Promise<void> {
     .lt('expires_at', now);
   if (err1) console.error('[persistence] clearExpiredCache competitions error:', err1.message);
 
-  const { error: err2 } = await supabase
-    .from('liveffn_epreuves')
-    .delete()
-    .lt('fetched_at', now);
-  if (err2) console.error('[persistence] clearExpiredCache epreuves error:', err2.message);
-
-  const { error: err3 } = await supabase
-    .from('liveffn_resultats')
-    .delete()
-    .lt('fetched_at', now);
-  if (err3) console.error('[persistence] clearExpiredCache resultats error:', err3.message);
+  // Ne pas supprimer les résultats et épreuves par date (ils sont utiles plus longtemps)
+  // On nettoie seulement les compétitions expirées
 }

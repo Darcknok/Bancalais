@@ -1,3 +1,21 @@
+/**
+ * Layout de la barre de navigation inférieure (tabs) — Bancalais Natation.
+ *
+ * Ce fichier définit la navigation principale de l'application avec :
+ * - Une barre de tabs personnalisée (pas le Tab Navigator natif d'Expo Router)
+ * - Des onglets configurables selon le rôle de l'utilisateur :
+ *     • Tous les rôles : Accueil, Planning, Activité (notifications), Profil
+ *     • Admin serveur (id=1) : onglet Serveur supplémentaire
+ * - Un compteur de notifications non lues sur l'onglet Activité
+ * - Des animations de pression (spring) sur chaque onglet
+ * - Un design glassmorphism / floating bar avec coins arrondis
+ *
+ * Les écrans disponibles dans le Stack sous-jacent :
+ *   accueil, planning, race-feedback, notifications, coach, reglages, serveur, developpeur
+ *
+ * Note : le chat est désactivé en attendant une refonte.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
@@ -14,11 +32,14 @@ import { fetchUnreadCount } from '@/lib/api';
 export default function TabLayout() {
   const theme = useTheme();
   const segments = useSegments();
+  // Détermine l'onglet actif depuis l'URL (segments[1] = nom du tab)
   const activeTab = segments[1] ?? 'accueil';
   const { user, isCoach } = useAuth();
+  // Compteur de notifications non lues pour le badge
   const [unread, setUnread] = useState(0);
   const insets = useSafeAreaInsets();
 
+  // --- Chargement du nombre de notifications non lues ---
   const loadUnread = useCallback(async () => {
     if (!user) { setUnread(0); return; }
     const res = await fetchUnreadCount();
@@ -27,24 +48,32 @@ export default function TabLayout() {
 
   useEffect(() => { loadUnread(); }, [loadUnread]);
 
-  // Refresh unread count when notifications tab becomes active
+  // Rafraîchir le compteur quand l'onglet notifications devient actif
   useEffect(() => {
     if (activeTab === 'notifications') {
       loadUnread();
     }
   }, [activeTab, loadUnread]);
 
+  // Vérification spéciale : seul l'utilisateur avec id=1 a accès à l'onglet Serveur
+  const isServerAdmin = user?.id === 1;
+
+  // --- Définition des onglets ---
+  // Chaque tab définit : nom de route, label affiché, icônes (inactive/active), et badge optionnel
   const tabs: Array<{ name: string; label: string; icon: string; iconActive: string; badge?: number }> = [
     { name: 'accueil', label: 'Accueil', icon: 'home-outline', iconActive: 'home' },
     { name: 'planning', label: 'Planning', icon: 'calendar-outline', iconActive: 'calendar' },
     // Chat désactivé pour le moment
     // { name: 'chat', label: 'Chat', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
     { name: 'notifications', label: 'Activité', icon: 'notifications-outline', iconActive: 'notifications', badge: unread },
+    // Onglet Serveur visible uniquement pour l'admin serveur (id=1)
+    ...(isServerAdmin ? [{ name: 'serveur' as const, label: 'Serveur', icon: 'server-outline', iconActive: 'server' }] : []),
     { name: 'reglages', label: 'Profil', icon: 'person-outline', iconActive: 'person' },
   ];
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+      {/* Zone de contenu principal : le Stack Navigator occupe tout l'espace disponible */}
       <View style={styles.slot}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="accueil" />
@@ -55,10 +84,12 @@ export default function TabLayout() {
           <Stack.Screen name="notifications" />
           <Stack.Screen name="coach" />
           <Stack.Screen name="reglages" />
+          <Stack.Screen name="serveur" />
           <Stack.Screen name="developpeur" />
         </Stack>
       </View>
 
+      {/* Barre de navigation inférieure floating avec effet glassmorphism */}
       <View style={[
         styles.outerShell,
         { paddingBottom: Math.max(insets.bottom, Spacing.two) },
@@ -66,6 +97,7 @@ export default function TabLayout() {
         <ThemedView style={styles.innerCore}>
           {tabs.map(tab => {
             const isActive = activeTab === tab.name;
+            // Animation de scale pour l'effet de pression sur chaque onglet
             const scale = useRef(new Animated.Value(1)).current;
 
             const onPressIn = () => {
@@ -96,11 +128,13 @@ export default function TabLayout() {
               >
                 <Animated.View style={[{ transform: [{ scale }] }, styles.tabInner, isActive && { backgroundColor: Accent + '12' }]}>
                   <View>
+                    {/* Icône : variant active si l'onglet est sélectionné */}
                     <Ionicons
                       name={(isActive ? tab.iconActive : tab.icon) as any}
                       size={20}
                       color={isActive ? Accent : undefined}
                     />
+                    {/* Badge du compteur de notifications non lues */}
                     {tab.badge != null && tab.badge > 0 && (
                       <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
                         <ThemedText style={styles.badgeText}>
@@ -127,6 +161,10 @@ export default function TabLayout() {
   );
 }
 
+// --- Styles ---
+// Layout : root (container flex), slot (zone Stack), outerShell (marge barre),
+// innerCore (barre elle-même), tabButton/tabInner (chaque onglet),
+// badge/badgeText (compteur de notifications)
 const styles = StyleSheet.create({
   root: {
     flex: 1,

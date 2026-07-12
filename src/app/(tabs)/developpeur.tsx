@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { DoubleBezelCard } from '@/components/double-bezel-card';
 import { ThemedText } from '@/components/themed-text';
@@ -18,13 +19,22 @@ import {
   type ApiProfile, type ApiClub, type ApiPB,
 } from '@/lib/api';
 
-type TabName = 'users' | 'clubs' | 'notif';
+type TabName = 'users' | 'clubs' | 'notif' | 'test';
 
 const TABS: { key: TabName; icon: string; label: string }[] = [
   { key: 'users', icon: 'people-outline', label: 'Utilisateurs' },
   { key: 'clubs', icon: 'business-outline', label: 'Clubs' },
   { key: 'notif', icon: 'megaphone-outline', label: 'Notification' },
+  { key: 'test', icon: 'flask-outline', label: 'Test' },
 ];
+
+const STORAGE_KEY_SCANNED_COMPS = 'bancalais_scanned_comps';
+const COMP_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 1 week in ms
+
+type ScannedCompetition = {
+  id: number;
+  addedAt: number; // timestamp
+};
 
 function TabBar({ active, onSelect }: { active: TabName; onSelect: (t: TabName) => void }) {
   const theme = useTheme();
@@ -148,6 +158,96 @@ export default function DeveloppeurScreen() {
   const [editingPBId, setEditingPBId] = useState<number | null>(null);
   const [editPBData, setEditPBData] = useState<{ nage: string; type_nage: 'crawl' | 'dos' | 'brass' | 'pap'; temps: string }>({ nage: '', type_nage: 'crawl', temps: '' });
   const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // ─── Test tab state ─────────────────────────────────────────────
+  const [reveilTime, setReveilTime] = useState('07:30');
+  const [scanCompId, setScanCompId] = useState('');
+  const [scannedComps, setScannedComps] = useState<ScannedCompetition[]>([]);
+  const [timeLeft, setTimeLeft] = useState<Record<number, string>>({});
+
+  // Load scanned competitions from storage
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY_SCANNED_COMPS);
+        if (raw) {
+          const all: ScannedCompetition[] = JSON.parse(raw);
+          const now = Date.now();
+          // Filter out expired ones
+          const valid = all.filter(c => now - c.addedAt < COMP_EXPIRY_MS);
+          if (valid.length !== all.length) {
+            await AsyncStorage.setItem(STORAGE_KEY_SCANNED_COMPS, JSON.stringify(valid));
+          }
+          setScannedComps(valid);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  // Update countdown every 30s
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      const map: Record<number, string> = {};
+      for (const c of scannedComps) {
+        const remaining = COMP_EXPIRY_MS - (now - c.addedAt);
+        if (remaining <= 0) {
+          map[c.id] = 'Expirée';
+        } else {
+          const days = Math.floor(remaining / 86400000);
+          const hrs = Math.floor((remaining % 86400000) / 3600000);
+          map[c.id] = `${days}j ${hrs}h`;
+        }
+      }
+      setTimeLeft(map);
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [scannedComps]);
+
+  const handleAddScannedComp = async () => {
+    const id = parseInt(scanCompId.trim(), 10);
+    if (isNaN(id)) { Alert.alert('Erreur', 'ID de compétition invalide'); return; }
+    if (scannedComps.some(c => c.id === id)) { Alert.alert('Info', 'Compétition déjà scannée'); return; }
+    const newComp: ScannedCompetition = { id, addedAt: Date.now() };
+    const updated = [...scannedComps, newComp];
+    setScannedComps(updated);
+    setScanCompId('');
+    try { await AsyncStorage.setItem(STORAGE_KEY_SCANNED_COMPS, JSON.stringify(updated)); } catch {}
+  };
+
+  const handleRemoveScannedComp = async (id: number) => {
+    const updated = scannedComps.filter(c => c.id !== id);
+    setScannedComps(updated);
+    try { await AsyncStorage.setItem(STORAGE_KEY_SCANNED_COMPS, JSON.stringify(updated)); } catch {}
+  };
+
+  const handleReveilConfirm = async () => {
+    Alert.alert(
+      'Confirmation réveil',
+      `Un réveil sera programmé à ${reveilTime}.\nVoulez-vous continuer ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Confirmer',
+          onPress: async () => {
+            const { error } = await createNotification({
+              type: 'reminder',
+              title: '⏰ Réveil compétition',
+              body: `C'est l'heure de se préparer ! Réveil programmé à ${reveilTime}.`,
+              target_role: null,
+            });
+            if (error) {
+              Alert.alert('Erreur', error);
+            } else {
+              Alert.alert('✅ Réveil programmé', `Notification de réveil à ${reveilTime}.`);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const filteredUsers = users.filter(u =>
     `${u.prenom} ${u.nom} ${u.email}`.toLowerCase().includes(userSearch.toLowerCase()),
@@ -540,6 +640,117 @@ export default function DeveloppeurScreen() {
               )}
             </Pressable>
           </DoubleBezelCard>
+        )}
+
+        {/* ---- TAB TEST ---- */}
+        {activeTab === 'test' && (
+          <>
+            {/* ── Réveil ── */}
+            <DoubleBezelCard accent style={Shadows.medium as any}>
+              <View style={styles.sectionHead}>
+                <Ionicons name="alarm-outline" size={15} color={Accent} />
+                <ThemedText style={styles.sectionTitle}>
+                  ⏰ Réveil
+                </ThemedText>
+              </View>
+
+              <ThemedText style={styles.notifDesc}>
+                Programmez une alarme de réveil basée sur l'heure d'ouverture des portes.
+              </ThemedText>
+
+              <View style={styles.reveilRow}>
+                <ThemedText style={styles.reveilLabel}>Heure du réveil</ThemedText>
+                <TextInput
+                  value={reveilTime}
+                  onChangeText={setReveilTime}
+                  placeholder="HH:MM"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.reveilInput, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.hairline }]}
+                />
+              </View>
+
+              <Pressable
+                onPress={handleReveilConfirm}
+                style={({ pressed }) => [styles.sendBtn, {
+                  backgroundColor: Accent,
+                  opacity: pressed ? 0.9 : 1,
+                  marginTop: Spacing.three,
+                }]}
+              >
+                <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                <ThemedText style={styles.sendBtnText}>Confirmer le réveil</ThemedText>
+              </Pressable>
+            </DoubleBezelCard>
+
+            {/* ── Notes avancées (coming soon) ── */}
+            <DoubleBezelCard accent style={Shadows.medium as any}>
+              <View style={styles.sectionHead}>
+                <Ionicons name="document-text-outline" size={15} color={Accent} />
+                <ThemedText style={styles.sectionTitle}>
+                  📝 Notes avancées
+                </ThemedText>
+              </View>
+              <View style={styles.comingSoon}>
+                <Ionicons name="construct-outline" size={28} color={theme.textSecondary} />
+                <ThemedText style={styles.comingSoonText}>
+                  Fonctionnalité à venir…
+                </ThemedText>
+              </View>
+            </DoubleBezelCard>
+
+            {/* ── Scan compétition ── */}
+            <DoubleBezelCard accent style={Shadows.medium as any}>
+              <View style={styles.sectionHead}>
+                <Ionicons name="scan-outline" size={15} color={Accent} />
+                <ThemedText style={styles.sectionTitle}>
+                  Scan compétition
+                </ThemedText>
+              </View>
+
+              <ThemedText style={styles.notifDesc}>
+                Ajoutez une compétition par son ID LiveFFN. Elle sera disponible pendant 1 semaine.
+              </ThemedText>
+
+              <View style={styles.scanRow}>
+                <TextInput
+                  value={scanCompId}
+                  onChangeText={setScanCompId}
+                  placeholder="ID compétition"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="numeric"
+                  style={[styles.scanInput, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.hairline }]}
+                />
+                <Pressable
+                  onPress={handleAddScannedComp}
+                  style={({ pressed }) => [styles.scanAddBtn, {
+                    backgroundColor: Accent,
+                    opacity: pressed ? 0.8 : 1,
+                  }]}
+                >
+                  <Ionicons name="add" size={18} color="#fff" />
+                </Pressable>
+              </View>
+
+              {scannedComps.length > 0 && (
+                <View style={styles.scanList}>
+                  {scannedComps.map(c => (
+                    <View key={c.id} style={[styles.scanItem, { backgroundColor: theme.backgroundElement }]}>
+                      <View style={styles.scanItemLeft}>
+                        <Ionicons name="flag-outline" size={14} color={Accent} />
+                        <ThemedText style={styles.scanItemId}>#{c.id}</ThemedText>
+                        <ThemedText style={[styles.scanItemExpiry, { color: theme.textSecondary }]}>
+                          {timeLeft[c.id] ?? '…'}
+                        </ThemedText>
+                      </View>
+                      <Pressable onPress={() => handleRemoveScannedComp(c.id)} style={styles.scanItemDel}>
+                        <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </DoubleBezelCard>
+          </>
         )}
 
         <View style={{ height: 40 }} />
@@ -1487,5 +1698,90 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  // ─── Test tab styles ────────────────────────────────────────────
+  reveilRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  reveilLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  reveilInput: {
+    width: 80,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radii.sm,
+    borderWidth: 1,
+    fontVariant: ['tabular-nums'],
+  },
+  comingSoon: {
+    alignItems: 'center',
+    paddingVertical: Spacing.five,
+    gap: Spacing.two,
+  },
+  comingSoonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  scanRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  scanInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radii.sm,
+    borderWidth: 1,
+  },
+  scanAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanList: {
+    marginTop: Spacing.three,
+    gap: Spacing.one,
+  },
+  scanItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radii.sm,
+  },
+  scanItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  scanItemId: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  scanItemExpiry: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  scanItemDel: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

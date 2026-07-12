@@ -132,28 +132,51 @@ function extractStructureFromUrl(url: string | undefined): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-function parseSwimmerName(fullName: string): { lastName: string; firstName: string } {
+/**
+ * Extrait le nom et le prénom d'un nom complet au format français LiveFFN.
+ *
+ * La convention LiveFFN est claire : le nom de famille est en MAJUSCULES
+ * et le(s) prénom(s) sont en minuscules / capitale initiale.
+ *
+ * Exemples :
+ *   "CALAIS OREFICE Mathias"    → lastName="CALAIS OREFICE", firstName="Mathias"
+ *   "SIMON LEGRAND Sanzo"       → lastName="SIMON LEGRAND", firstName="Sanzo"
+ *   "ROBERT Antoine"            → lastName="ROBERT", firstName="Antoine"
+ *   "DUPONT Jean Marie"         → lastName="DUPONT", firstName="Jean Marie"
+ *   "D'ARGENT Sophie"           → lastName="D'ARGENT", firstName="Sophie"
+ */
+function parseFrenchName(fullName: string): { lastName: string; firstName: string } {
   const trimmed = fullName.trim();
-  
-  // Cette regex capture tous les mots consécutifs en MAJUSCULES (y compris avec espaces/tirets)
-  const match = trimmed.match(/^([A-ZÀ-ÖØ-ß\s\-]+)\s+(.+)$/);
-  
-  if (match) {
-    return {
-      lastName: match[1].trim(),
-      firstName: match[2].trim()
-    };
+  if (!trimmed) return { lastName: '', firstName: '' };
+
+  const words = trimmed.split(/\s+/);
+  const lastNameWords: string[] = [];
+  const firstNameWords: string[] = [];
+  let foundNonUpper = false;
+
+  for (const word of words) {
+    // Un mot est considéré comme "tout majuscule" s'il contient au moins
+    // une lettre et que toutes ses lettres sont en majuscules (supporte les
+    // accents français, les apostrophes et les traits d'union).
+    const isAllUpper = word === word.toUpperCase() && /[A-ZÀ-ÖØ-Þ]/i.test(word);
+
+    if (isAllUpper && !foundNonUpper) {
+      lastNameWords.push(word);
+    } else {
+      foundNonUpper = true;
+      firstNameWords.push(word);
+    }
   }
-  
-  // Fallback si le format est bizarre
-  const spaceIdx = trimmed.indexOf(' ');
-  if (spaceIdx === -1) return { lastName: trimmed, firstName: '' };
+
   return {
-    lastName: trimmed.substring(0, spaceIdx),
-    firstName: trimmed.substring(spaceIdx + 1).trim(),
+    lastName: lastNameWords.join(' '),
+    firstName: firstNameWords.join(' '),
   };
 }
 
+// Garder parseSwimmerName comme alias pour compatibilité, mais utiliser
+// la nouvelle implémentation intelligente.
+const parseSwimmerName = parseFrenchName;
 
 function parseTimeToMs(time: string): number | null {
   // "00:48.82" or "23.38" or "--:--.--" or "59:59.99"
@@ -347,9 +370,12 @@ export function parseParticipants(html: string): LiveFFNParticipant[] {
     const iuf = extractIufFromUrl($nageurLink.attr('href'));
     if (!iuf || !fullName) return;
 
-    // French format: "NOM Prenom" -> first part is the surname
-    const { lastName: nom, firstName: prenom } = parseSwimmerName(fullName);
-    
+    // French format: "NOM Prenom" — le nom de famille est en MAJUSCULES
+    // (éventuellement composé : "CALAIS OREFICE Mathias")
+    const parsed = parseFrenchName(fullName);
+    const nom = parsed.lastName;
+    const prenom = parsed.firstName;
+
     const birthYearText = $li.find('.naissance').text().trim();
     const birthYear = parseInt(birthYearText, 10) || 0;
     const nationality = $li.find('.nationalite').text().trim() || 'FRA';
@@ -498,6 +524,7 @@ function getTypeTourFromTypId(typId: number): string {
     case 11: return 'Finale A';
     case 12: return 'Finale B';
     case 13: return 'Finale C';
+    case 14: return 'Finale D';
     case 60: return 'Séries';
     case 61: return 'Série finale';
     case 62: return 'Premières séries';
@@ -704,21 +731,23 @@ export function parseSwimmerResults(html: string): {
   const results: LiveFFNRaceResult[] = [];
 
   // Header info: "GABALI Cedric (2004) FRA - CN MARSEILLE"
+  //              "CALAIS OREFICE Mathias (2011) FRA - CN MARSEILLE"
   const headerText = decodeHtmlEntities($('td.resStructureIndividu1, td.resStructureIndividu2').first().text().trim());
-  const headerMatch = headerText.match(/^([A-ZÀ-ÖØ-ß\s\-]+)\s+(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
-  let swimmer: Partial<LiveFFNSwimmer> = {};
+  const headerMatch = headerText.match(/(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
   let club: Partial<LiveFFNClub> = {};
 
   if (headerMatch) {
+    const fullNamePart = headerMatch[1].trim();
+    const parsed = parseFrenchName(fullNamePart);
     swimmer = {
-      lastName: headerMatch[1],
-      firstName: headerMatch[2].trim(),
-      fullName: `${headerMatch[1]} ${headerMatch[2].trim()}`,
-      birthYear: parseInt(headerMatch[3], 10),
-      nationality: headerMatch[4],
-      clubName: headerMatch[5].trim(),
+      lastName: parsed.lastName,
+      firstName: parsed.firstName,
+      fullName: fullNamePart,
+      birthYear: parseInt(headerMatch[2], 10),
+      nationality: headerMatch[3],
+      clubName: headerMatch[4].trim(),
     };
-    club = { name: headerMatch[5].trim() };
+    club = { name: headerMatch[4].trim() };
   }
 
   // Club info in h2
@@ -740,7 +769,8 @@ export function parseSwimmerResults(html: string): {
 
     // Split event name and round
     // "100 Nage Libre Messieurs Finale A"
-    const roundMatch = eventFullName.match(/\s+(Finale\s+\w|S[eé]ries|S[eé]rie\s+finale|Premi[eè]res\s+s[eé]ries)$/i);
+    // "100 Brasse Dames Finale D U15 & Moins"  (age-group suffix)
+    const roundMatch = eventFullName.match(/\s+(Finale\s+\w|S[eé]ries|S[eé]rie\s+finale|Premi[eè]res\s+s[eé]ries)(?:\s+U\d+(?:\s*&.*)?)?$/i);
     const round = roundMatch ? roundMatch[1].trim() : 'Séries';
     const eventName = eventFullName.replace(roundMatch?.[0] || '', '').trim();
 
@@ -868,15 +898,16 @@ export function parseClubDetails(html: string): {
   // For now, collect individual swimmer blocks
   $('td.resStructureIndividu1, td.resStructureIndividu2').each((_, td) => {
     const headerText = decodeHtmlEntities($(td).text().trim());
-    const headerMatch = headerText.match(/^([A-ZÀ-ÖØ-ß\s\-]+)\s+(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
-    if (headerMatch) {
+    const headerMatch = headerText.match(/(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
+      const fullNamePart = headerMatch[1].trim();
+      const parsed = parseFrenchName(fullNamePart);
       const swimmerData: Partial<LiveFFNSwimmer> = {
-        lastName: headerMatch[1],
-        firstName: headerMatch[2].trim(),
-        fullName: `${headerMatch[1]} ${headerMatch[2].trim()}`,
-        birthYear: parseInt(headerMatch[3], 10),
-        nationality: headerMatch[4],
-        clubName: headerMatch[5].trim(),
+        lastName: parsed.lastName,
+        firstName: parsed.firstName,
+        fullName: fullNamePart,
+        birthYear: parseInt(headerMatch[2], 10),
+        nationality: headerMatch[3],
+        clubName: headerMatch[4].trim(),
       };
       swimmers.push({ swimmer: swimmerData, results: [] });
     }

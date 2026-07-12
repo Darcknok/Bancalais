@@ -12,6 +12,7 @@ import {
   notifyRaceResult,
   scheduleRaceReminder,
 } from '@/lib/notifications';
+import { saveReminderData, clearReminderData } from '@/lib/reminder-storage';
 
 type RaceEvent = {
   id: number;
@@ -72,8 +73,20 @@ export function useRaceReminders({ events, minutesBefore = 10, previousResults }
       });
     });
 
+    // Persister les données pour restauration au prochain démarrage
+    saveReminderData(events, minutesBefore).catch(err =>
+      console.warn('[reminders] Erreur sauvegarde persistante:', err)
+    );
+
     // PAS de cleanup — les rappels doivent survivre au démontage du composant
   }, [events, minutesBefore]);
+
+  // ─── Nettoyage si plus aucune course ────────────────────────
+  useEffect(() => {
+    if (!events.length) {
+      clearReminderData().catch(() => {});
+    }
+  }, [events.length]);
 
   // ─── Détection des nouveaux résultats ───────────────────────
   useEffect(() => {

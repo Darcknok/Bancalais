@@ -1,8 +1,9 @@
 /**
- * Express routes for the LiveFFN API.
- * Provides cached endpoints for LiveFFN data.
+ * Routes API pour le module LiveFFN.
+ * Fournit des endpoints cache pour les données de compétitions, programmes,
+ * résultats, participants, nageurs et clubs récupérées depuis liveffn.com
+ * (plateforme FFN — Fédération Française de Natation).
  */
-
 import { Router, type Request, type Response } from 'express';
 import {
   fetchCompetitionList,
@@ -41,35 +42,35 @@ import type { CacheKey } from './types';
 
 export const liveffnRouter = Router();
 
-// ─── Utility ─────────────────────────────────────────────────────
-
+// --- Fonction utilitaire : gestion centralisée des erreurs LiveFFN ---
+// Retourne un 502 (Bad Gateway) car les erreurs viennent du scraping externe
 function handleError(res: Response, error: unknown, context: string) {
   console.error(`LiveFFN ${context} error:`, error);
   const message = error instanceof Error ? error.message : 'Erreur lors de la récupération des données LiveFFN';
   res.status(502).json({ error: message, context });
 }
 
-// ─── Endpoints ───────────────────────────────────────────────────
+// --- Endpoints API LiveFFN ---
+// Stratégie de cache : DB d'abord, puis scraping + persist, puis cache mémoire
 
 /**
- * GET /api/liveffn/competitions
- * List all competitions from LiveFFN.
- * Query params:
- *   - page: "courantes" | "recemment_termine" (default: "courantes")
+ * GET /api/liveffn/competitions — Liste des compétitions.
+ * Paramètres de requête :
+ *   - page : "courantes" (par défaut) | "recemment_termine"
  */
 liveffnRouter.get('/competitions', async (req: Request, res: Response) => {
   try {
     const page = String(req.query.page ?? '') === 'recemment_termine' ? 'recemment_termine' : 'courantes';
     const cacheKey: CacheKey = `competition_list`;
 
-    // Try DB first
+    // Priorité 1 : données en base (rapide, pas de scraping)
     const dbList = await getCompetitionListFromDB(page);
     if (dbList) {
       res.json({ competitions: dbList, count: dbList.length, page });
       return;
     }
 
-    // Fall back to scrape with persist
+    // Priorité 2 : scraping liveffn.com + persistance en base + cache mémoire
     const competitions = await cachedFetch(cacheKey, async () => {
       const html = await fetchCompetitionList(page);
       return parseCompetitionList(html);
@@ -84,8 +85,8 @@ liveffnRouter.get('/competitions', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/liveffn/competitions/:id
- * Get detailed info about a specific competition.
+ * GET /api/liveffn/competitions/:id — Détail d'une compétition.
+ * Retourne les informations complètes (dates, lieu, organisateur, etc.)
  */
 liveffnRouter.get('/competitions/:id', async (req: Request, res: Response) => {
   try {
@@ -97,14 +98,14 @@ liveffnRouter.get('/competitions/:id', async (req: Request, res: Response) => {
 
     const cacheKey: CacheKey = `competition_${id}`;
 
-    // Try DB first
+    // Priorité 1 : données en base
     const dbCompetition = await getCompetitionFromDB(id);
     if (dbCompetition) {
       res.json({ competition: dbCompetition });
       return;
     }
 
-    // Fall back to scrape with persist
+    // Priorité 2 : scraping + persistance
     const competition = await cachedFetch(cacheKey, async () => {
       const html = await fetchCompetitionPage(id);
       return parseCompetitionDetail(html, id);
@@ -119,8 +120,8 @@ liveffnRouter.get('/competitions/:id', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/liveffn/competitions/:id/program
- * Get the program (schedule) for a competition.
+ * GET /api/liveffn/competitions/:id/program — Programme de la compétition.
+ * Retourne les sessions et épreuves (par séries, distances, styles, etc.)
  */
 liveffnRouter.get('/competitions/:id/program', async (req: Request, res: Response) => {
   try {
@@ -138,7 +139,7 @@ liveffnRouter.get('/competitions/:id/program', async (req: Request, res: Respons
     }, undefined, async (data) => {
       for (const session of data) {
         for (const event of session.epreuves) {
-          // Skip events without a valid ID (presenceNonOk, no onclick tooltip)
+          // Ignorer les épreuves sans ID valide (présence non ok, tooltip absent)
           if (event.id === 0 || event.id == null) continue;
           await saveEventToDB({
             ...event,
@@ -157,8 +158,9 @@ liveffnRouter.get('/competitions/:id/program', async (req: Request, res: Respons
 });
 
 /**
- * GET /api/liveffn/competitions/:id/events
- * Get all events from the program (flat list).
+ * GET /api/liveffn/competitions/:id/events — Liste plate de toutes les épreuves.
+ * Regroupe les épreuves de toutes les sessions en un seul tableau.
+ * Filtrable par genre via le paramètre ?genre=F ou ?genre=M.
  */
 liveffnRouter.get('/competitions/:id/events', async (req: Request, res: Response) => {
   try {
@@ -187,7 +189,7 @@ liveffnRouter.get('/competitions/:id/events', async (req: Request, res: Response
       }
     });
 
-    // Flatten all events from all sessions
+    // Aplatir toutes les épreuves de toutes les sessions
     const events = sessions.flatMap(s =>
       s.epreuves.map(e => ({
         ...e,
@@ -197,7 +199,7 @@ liveffnRouter.get('/competitions/:id/events', async (req: Request, res: Response
       }))
     );
 
-    // Optional filter by gender
+    // Filtrage optionnel par genre (F = Féminin, M = Masculin)
     const genre = typeof req.query.genre === 'string' ? req.query.genre : undefined;
     const filtered = genre ? events.filter(e => e.genre === genre.toUpperCase()) : events;
 
@@ -208,8 +210,7 @@ liveffnRouter.get('/competitions/:id/events', async (req: Request, res: Response
 });
 
 /**
- * GET /api/liveffn/competitions/:id/participants
- * Get the participant list for a competition.
+ * GET /api/liveffn/competitions/:id/participants — Liste des participants inscrits.
  */
 liveffnRouter.get('/competitions/:id/participants', async (req: Request, res: Response) => {
   try {
@@ -233,8 +234,8 @@ liveffnRouter.get('/competitions/:id/participants', async (req: Request, res: Re
 });
 
 /**
- * GET /api/liveffn/competitions/:id/results/:eventId
- * Get results for a specific event.
+ * GET /api/liveffn/competitions/:id/results/:eventId — Résultats d'une épreuve.
+ * Retourne les résultats par série et par tour (séries, demi-finales, finales).
  */
 liveffnRouter.get('/competitions/:id/results/:eventId', async (req: Request, res: Response) => {
   try {
@@ -247,14 +248,14 @@ liveffnRouter.get('/competitions/:id/results/:eventId', async (req: Request, res
 
     const cacheKey: CacheKey = `competition_${compId}_results_${eventId}`;
 
-    // Try DB first
+    // Priorité 1 : résultats en base
     const dbResults = await getEventResultsFromDB(eventId);
     if (dbResults) {
       res.json({ competitionId: compId, ...dbResults });
       return;
     }
 
-    // Fall back to scrape with persist
+    // Priorité 2 : scraping + persistance des résultats
     const result = await cachedFetch(cacheKey, async () => {
       const html = await fetchEventResults(compId, eventId);
       return parseEventResults(html, eventId);
@@ -272,8 +273,8 @@ liveffnRouter.get('/competitions/:id/results/:eventId', async (req: Request, res
 });
 
 /**
- * GET /api/liveffn/competitions/:id/startlist/:eventId
- * Get start list for a specific event.
+ * GET /api/liveffn/competitions/:id/startlist/:eventId — Liste de départ d'une épreuve.
+ * Affiche l'ordre de passage par série avec les temps de chrono.
  */
 liveffnRouter.get('/competitions/:id/startlist/:eventId', async (req: Request, res: Response) => {
   try {
@@ -298,10 +299,8 @@ liveffnRouter.get('/competitions/:id/startlist/:eventId', async (req: Request, r
 });
 
 /**
- * GET /api/liveffn/swimmer/:iuf
- * Get swimmer details and results.
- * Query params:
- *   - competition: competition ID (required to fetch context)
+ * GET /api/liveffn/swimmer/:iuf — Fiche détaillée d'un nageur.
+ * Paramètres requis : iuf (identifiant FFN du nageur), ?competition=ID (compétition contexte).
  */
 liveffnRouter.get('/swimmer/:iuf', async (req: Request, res: Response) => {
   try {
@@ -326,8 +325,7 @@ liveffnRouter.get('/swimmer/:iuf', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/liveffn/club/:structureId
- * Get club details and members.
+ * GET /api/liveffn/club/:structureId — Fiche d'un club avec la liste de ses licenciés.
  */
 liveffnRouter.get('/club/:structureId', async (req: Request, res: Response) => {
   try {
@@ -352,8 +350,8 @@ liveffnRouter.get('/club/:structureId', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/liveffn/live/:id
- * Get live data for a competition.
+ * GET /api/liveffn/live/:id — Données en temps réel d'une compétition.
+ * La page liveffn.com se rafraîchit automatiquement pendant la compétition.
  */
 liveffnRouter.get('/live/:id', async (req: Request, res: Response) => {
   try {
@@ -364,17 +362,17 @@ liveffnRouter.get('/live/:id', async (req: Request, res: Response) => {
     }
 
     const html = await fetchLiveData(id);
-    // Live data has its own specific HTML structure
-    // For now, parse the basic live page
+    // La page live a une structure HTML spécifique
+    // Pour l'instant, extraction des infos de base
     const $ = await import('cheerio').then(c => c.load(html));
 
-    // Extract session info and race data from live page
+    // Extraction des informations de session et de course depuis la page live
     const liveData = {
       competitionId: id,
       isLive: html.includes('flag_page_deja_donne:1') || !html.includes('flag_page_deja_donne:0'),
       rawLength: html.length,
-      // The live page auto-refreshes and contains race data
-      // Full parsing of live data will be enhanced in future versions
+      // La page live se rafraîchit et contient les données de course
+      // Le parsing complet sera amélioré dans les prochaines versions
     };
 
     res.json(liveData);
@@ -384,8 +382,7 @@ liveffnRouter.get('/live/:id', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/liveffn/cache/stats
- * Get cache statistics (admin/monitoring).
+ * GET /api/liveffn/cache/stats — Statistiques du cache (monitoring/admin).
  */
 liveffnRouter.get('/cache/stats', (_req: Request, res: Response) => {
   const stats = getCacheStats();
@@ -393,8 +390,7 @@ liveffnRouter.get('/cache/stats', (_req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/liveffn/cache
- * Invalidate all cache.
+ * DELETE /api/liveffn/cache — Invalide tout le cache en mémoire.
  */
 liveffnRouter.delete('/cache', (_req: Request, res: Response) => {
   invalidateAllCache();
@@ -402,8 +398,7 @@ liveffnRouter.delete('/cache', (_req: Request, res: Response) => {
 });
 
 /**
- * GET /api/liveffn/health
- * Health check for the LiveFFN module.
+ * GET /api/liveffn/health — Vérification de santé du module LiveFFN.
  */
 liveffnRouter.get('/health', (_req: Request, res: Response) => {
   res.json({

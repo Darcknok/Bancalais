@@ -16,7 +16,7 @@ router.get('/users', async (_req, res) => {
   try {
     const { data: users, error } = await supabase
       .from('profiles')
-      .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications')
+      .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications, reminder_delay')
       .order('id');
 
     if (error) throw error;
@@ -32,7 +32,7 @@ router.get('/users/:id', async (req, res) => {
   try {
     const { data: user, error } = await supabase
       .from('profiles')
-      .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications')
+      .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications, reminder_delay')
       .eq('id', parseInt(String(req.params.id), 10))
       .maybeSingle();
 
@@ -54,6 +54,7 @@ router.patch('/users/:id', async (req, res) => {
       'club_id', 'referral_code_used',
       'message_notifications', 'announcement_notifications',
       'event_notifications', 'mention_notifications', 'invite_notifications',
+      'reminder_delay',
     ];
 
     const updates: Record<string, unknown> = {};
@@ -72,7 +73,7 @@ router.patch('/users/:id', async (req, res) => {
       .from('profiles')
       .update(updates)
       .eq('id', parseInt(String(req.params.id), 10))
-      .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications')
+      .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications, reminder_delay')
       .single();
 
     if (error || !updated) {

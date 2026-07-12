@@ -1,3 +1,9 @@
+/**
+ * Routes d'authentification.
+ * Gère l'inscription (avec code de parrainage club), la connexion,
+ * la récupération du profil, la mise à jour du profil, les PBs,
+ * et la consultation des clubs.
+ */
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -8,11 +14,15 @@ import type { RegisterBody, LoginBody, Profile, SafeProfile } from '../types';
 
 const router = Router();
 
+// --- Fonctions utilitaires internes ---
+
+/** Retourne une copie du profil sans le hash du mot de passe (jamais exposé au client) */
 function toSafeProfile(p: Profile): SafeProfile {
   const { hashed_password: _, ...safe } = p;
   return safe;
 }
 
+/** Signe un JWT contenant les informations essentielles du profil (durée : 30 jours) */
 function signToken(profile: Profile): string {
   const payload = {
     sub: String(profile.id),
@@ -27,6 +37,8 @@ function signToken(profile: Profile): string {
   return jwt.sign(payload, config.jwtSecret);
 }
 
+// --- Route : Inscription ---
+// POST /api/auth/register — Crée un compte et rattache optionnellement à un club via code de parrainage
 router.post('/register', async (req, res) => {
   try {
     const body = req.body as RegisterBody;
@@ -99,6 +111,8 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// --- Route : Connexion ---
+// POST /api/auth/login — Authentifie l'utilisateur et retourne un JWT
 router.post('/login', async (req, res) => {
   try {
     const body = req.body as LoginBody;
@@ -133,6 +147,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// --- Route : Profil utilisateur ---
+// GET /api/auth/me — Récupère le profil complet de l'utilisateur connecté (auth requis)
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const authReq = req as AuthRequest;
@@ -155,6 +171,8 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// --- Route : Mise à jour du profil ---
+// PATCH /api/auth/met — Met à jour les champs autorisés du profil (auth requis)
 router.patch('/me', authMiddleware, async (req, res) => {
   try {
     const authReq = req as AuthRequest;
@@ -162,6 +180,7 @@ router.patch('/me', authMiddleware, async (req, res) => {
       'prenom', 'nom', 'bio', 'avatar',
       'message_notifications', 'announcement_notifications',
       'event_notifications', 'mention_notifications', 'invite_notifications',
+      'reminder_delay',
     ];
 
     const updates: Record<string, unknown> = {};
@@ -203,6 +222,8 @@ router.patch('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// --- Route : Records personnels ---
+// GET /api/auth/pbs — Liste les records du nageur connecté, triés par épreuve (auth requis)
 router.get('/pbs', authMiddleware, async (req, res) => {
   try {
     const authReq = req as AuthRequest;
@@ -220,6 +241,8 @@ router.get('/pbs', authMiddleware, async (req, res) => {
   }
 });
 
+// --- Route : Liste des clubs ---
+// GET /api/auth/clubs — Retourne tous les clubs (accès public, pour l'écran d'inscription)
 router.get('/clubs', async (_req, res) => {
   try {
     const { data: clubs } = await supabase
@@ -234,6 +257,8 @@ router.get('/clubs', async (_req, res) => {
   }
 });
 
+// --- Route : Recherche de club par code ---
+// GET /api/auth/club/:code — Vérifie un code de parrainage et retourne le club associé
 router.get('/club/:code', async (req, res) => {
   try {
     const code = req.params.code.toUpperCase();
