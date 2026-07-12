@@ -57,6 +57,10 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<strin
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
 
+      if (err instanceof LiveFFNFetchError && err.statusCode && err.statusCode < 500) {
+        break;
+      }
+
       if (attempt < retries) {
         await new Promise(r => setTimeout(r, RETRY_DELAY * (attempt + 1)));
         continue;

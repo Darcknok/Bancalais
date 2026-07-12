@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
   headerMeta: { fontSize: 12, fontWeight: '500' },
   timeline: { gap: 6 },
   row: { flexDirection: 'row', marginBottom: 16 },
-  dimmed: { opacity: 1 },
+  dimmed: { opacity: 0.5 },
   timeCol: { width: 52, justifyContent: 'center', alignItems: 'center' },
   timePill: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radii.sm },
   timeText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },

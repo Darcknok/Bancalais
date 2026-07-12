@@ -31,6 +31,8 @@ import {
   setToken,
   removeToken,
 } from '@/lib/api';
+import { clearReminderData } from '@/lib/reminder-storage';
+import { cancelAllRaceReminders } from '@/lib/notifications';
 
 // --- Type du contexte d'authentification ---
 type AuthContextType = {
@@ -79,15 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // --- Initialisation : restauration de la session au montage ---
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const token = await getToken();
-      if (!token) {
-        setIsLoading(false);
+      if (!token || cancelled) {
+        if (!cancelled) setIsLoading(false);
         return;
       }
 
       // Vérifier la validité du token en récupérant le profil utilisateur
       const { data, error } = await getMe();
+      if (cancelled) return;
       if (data?.user) {
         setUser(profileToUser(data.user));
       } else {
@@ -96,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setIsLoading(false);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   // --- Connexion ---
@@ -144,6 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await removeToken();
     setUser(null);
+    clearReminderData().catch(() => {});
+    cancelAllRaceReminders().catch(() => {});
   }, []);
 
   // --- Mise à jour du profil ---

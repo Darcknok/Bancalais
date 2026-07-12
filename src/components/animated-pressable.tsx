@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { Animated, Pressable, type StyleProp, type ViewStyle } from 'react-native';
 
 type Props = {
@@ -8,7 +8,7 @@ type Props = {
 };
 
 export function AnimatedPressable({ children, onPress, style }: Props) {
-  const scale = new Animated.Value(1);
+  const scale = useRef(new Animated.Value(1)).current;
 
   return (
     <Pressable

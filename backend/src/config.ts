@@ -15,6 +15,9 @@ export const config = {
   // --- Authentification JWT ---
   // Secret utilisé pour signer/valider les tokens. Fallback dev uniquement.
   jwtSecret: process.env.JWT_SECRET ?? (() => {
+    if ((process.env.NODE_ENV ?? 'development') === 'production') {
+      throw new Error('JWT_SECRET is required in production');
+    }
     console.warn('⚠️  WARNING: Using fallback JWT secret. Set JWT_SECRET in .env for production.');
     return 'fallback-dev-secret-do-not-use-in-prod';
   })(),

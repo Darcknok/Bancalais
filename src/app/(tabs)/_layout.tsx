@@ -29,6 +29,67 @@ import { useAuth } from '@/context/auth';
 import { useTheme } from '@/hooks/use-theme';
 import { fetchUnreadCount } from '@/lib/api';
 
+function TabButton({ tab, isActive, onPress, theme }: {
+  tab: { name: string; label: string; icon: string; iconActive: string; badge?: number };
+  isActive: boolean;
+  onPress: () => void;
+  theme: Record<string, string>;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.92,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      style={styles.tabButton}
+    >
+      <Animated.View style={[{ transform: [{ scale }] }, styles.tabInner, isActive && { backgroundColor: Accent + '12' }]}>
+        <View>
+          <Ionicons
+            name={(isActive ? tab.iconActive : tab.icon) as any}
+            size={20}
+            color={isActive ? Accent : undefined}
+          />
+          {tab.badge != null && tab.badge > 0 && (
+            <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
+              <ThemedText style={styles.badgeText}>
+                {tab.badge > 9 ? '9+' : tab.badge}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+        <ThemedText
+          style={[
+            styles.tabLabel,
+            { color: isActive ? Accent : theme.textSecondary },
+          ]}
+        >
+          {tab.label}
+        </ThemedText>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 export default function TabLayout() {
   const theme = useTheme();
   const segments = useSegments();
@@ -86,6 +147,7 @@ export default function TabLayout() {
           <Stack.Screen name="reglages" />
           <Stack.Screen name="serveur" />
           <Stack.Screen name="developpeur" />
+          <Stack.Screen name="create-competition" />
         </Stack>
       </View>
 
@@ -95,66 +157,15 @@ export default function TabLayout() {
         { paddingBottom: Math.max(insets.bottom, Spacing.two) },
       ]}>
         <ThemedView style={styles.innerCore}>
-          {tabs.map(tab => {
-            const isActive = activeTab === tab.name;
-            // Animation de scale pour l'effet de pression sur chaque onglet
-            const scale = useRef(new Animated.Value(1)).current;
-
-            const onPressIn = () => {
-              Animated.spring(scale, {
-                toValue: 0.92,
-                useNativeDriver: true,
-                speed: 50,
-                bounciness: 4,
-              }).start();
-            };
-
-            const onPressOut = () => {
-              Animated.spring(scale, {
-                toValue: 1,
-                useNativeDriver: true,
-                speed: 20,
-                bounciness: 8,
-              }).start();
-            };
-
-            return (
-              <Pressable
-                key={tab.name}
-                onPress={() => router.push(`/(tabs)/${tab.name}` as any)}
-                onPressIn={onPressIn}
-                onPressOut={onPressOut}
-                style={styles.tabButton}
-              >
-                <Animated.View style={[{ transform: [{ scale }] }, styles.tabInner, isActive && { backgroundColor: Accent + '12' }]}>
-                  <View>
-                    {/* Icône : variant active si l'onglet est sélectionné */}
-                    <Ionicons
-                      name={(isActive ? tab.iconActive : tab.icon) as any}
-                      size={20}
-                      color={isActive ? Accent : undefined}
-                    />
-                    {/* Badge du compteur de notifications non lues */}
-                    {tab.badge != null && tab.badge > 0 && (
-                      <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
-                        <ThemedText style={styles.badgeText}>
-                          {tab.badge > 9 ? '9+' : tab.badge}
-                        </ThemedText>
-                      </View>
-                    )}
-                  </View>
-                  <ThemedText
-                    style={[
-                      styles.tabLabel,
-                      { color: isActive ? Accent : theme.textSecondary },
-                    ]}
-                  >
-                    {tab.label}
-                  </ThemedText>
-                </Animated.View>
-              </Pressable>
-            );
-          })}
+          {tabs.map(tab => (
+            <TabButton
+              key={tab.name}
+              tab={tab}
+              isActive={activeTab === tab.name}
+              onPress={() => router.push(`/(tabs)/${tab.name}` as any)}
+              theme={theme}
+            />
+          ))}
         </ThemedView>
       </View>
     </View>

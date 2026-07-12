@@ -48,8 +48,8 @@ router.post('/register', async (req, res) => {
       return;
     }
 
-    if (body.password.length < 4) {
-      res.status(400).json({ error: 'Le mot de passe doit faire au moins 4 caractères' });
+    if (body.password.length < 8) {
+      res.status(400).json({ error: 'Le mot de passe doit faire au moins 8 caractères' });
       return;
     }
 
@@ -190,11 +190,8 @@ router.patch('/me', authMiddleware, async (req, res) => {
       }
     }
 
-    if (req.body.club_id !== undefined) {
-      updates.club_id = req.body.club_id;
-    }
-    if (req.body.referral_code_used !== undefined) {
-      updates.referral_code_used = req.body.referral_code_used;
+    if (req.body.club_id === null) {
+      updates.club_id = null;
     }
 
     if (Object.keys(updates).length === 0) {

@@ -228,10 +228,11 @@ router.post('/clubs/:id/logo', (req, res, next) => {
 router.get('/pbs/:user_id', async (req, res) => {
   try {
     const { user_id } = req.params;
+    const swimmerId = Number(user_id);
     const { data, error } = await supabase
       .from('pbs')
       .select('*')
-      .eq('swimmer_id', user_id)
+      .eq('swimmer_id', swimmerId)
       .order('nage');
 
     if (error) throw error;
@@ -261,7 +262,7 @@ router.post('/pbs/:user_id', async (req, res) => {
     const { data: existing } = await supabase
       .from('pbs')
       .select('id')
-      .eq('swimmer_id', user_id)
+      .eq('swimmer_id', Number(user_id))
       .eq('nage', nage)
       .maybeSingle();
 

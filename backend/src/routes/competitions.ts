@@ -95,10 +95,24 @@ router.post('/:id/inscrire', async (req, res) => {
   try {
     const authReq = req as AuthRequest;
     const userId = authReq.userId!;
+    const competitionId = parseInt(req.params.id, 10);
     const { epreuve_id, temps_engagement } = req.body as { epreuve_id: number; temps_engagement?: string };
 
     if (!epreuve_id) {
       res.status(400).json({ error: 'epreuve_id requis' });
+      return;
+    }
+
+    const { data: epreuve, error: epErr } = await supabase
+      .from('competition_epreuves')
+      .select('id')
+      .eq('id', epreuve_id)
+      .eq('competition_id', competitionId)
+      .maybeSingle();
+
+    if (epErr) throw epErr;
+    if (!epreuve) {
+      res.status(404).json({ error: 'Épreuve introuvable pour cette compétition' });
       return;
     }
 

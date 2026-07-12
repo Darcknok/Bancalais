@@ -25,16 +25,14 @@ router.get('/', async (req, res) => {
 
     if (error) {
       // Fallback: query directe si la RPC n'existe pas
-      let query = supabase
+      const { data: notifs, error: queryError } = await supabase
         .from('notifications')
         .select('*')
         .or(`club_id.is.null,club_id.eq.${userClubId ?? 0}`)
-        .or(`target_role.is.null,target_role.eq.${userRole}`)
         .order('created_at', { ascending: false });
-
-      const { data: notifs, error: queryError } = await query;
       if (queryError) throw queryError;
-      res.json({ notifications: notifs ?? [] });
+      const filtered = (notifs ?? []).filter(n => !n.target_role || n.target_role === userRole);
+      res.json({ notifications: filtered });
       return;
     }
 
@@ -96,16 +94,17 @@ router.post('/read-all', async (req, res) => {
 
     const { data: notifs } = await supabase
       .from('notifications')
-      .select('id, read_by')
-      .or(`club_id.is.null,club_id.eq.${userClubId ?? 0}`)
-      .or(`target_role.is.null,target_role.eq.${userRole}`);
+      .select('id, read_by, target_role')
+      .or(`club_id.is.null,club_id.eq.${userClubId ?? 0}`);
 
-    if (!notifs || notifs.length === 0) {
+    const filtered = (notifs ?? []).filter(n => !n.target_role || n.target_role === userRole);
+
+    if (!filtered || filtered.length === 0) {
       res.json({ success: true });
       return;
     }
 
-    const updates = notifs.map(n => {
+    const updates = filtered.map(n => {
       const readBy: number[] = n.read_by ?? [];
       if (!readBy.includes(userId)) {
         readBy.push(userId);
@@ -134,16 +133,17 @@ router.get('/unread-count', async (req, res) => {
 
     const { data: notifs } = await supabase
       .from('notifications')
-      .select('read_by')
-      .or(`club_id.is.null,club_id.eq.${userClubId ?? 0}`)
-      .or(`target_role.is.null,target_role.eq.${userRole}`);
+      .select('read_by, target_role')
+      .or(`club_id.is.null,club_id.eq.${userClubId ?? 0}`);
 
-    if (!notifs) {
+    const filtered = (notifs ?? []).filter(n => !n.target_role || n.target_role === userRole);
+
+    if (!filtered) {
       res.json({ count: 0 });
       return;
     }
 
-    const count = notifs.filter(n => !((n.read_by ?? []) as number[]).includes(userId)).length;
+    const count = filtered.filter(n => !((n.read_by ?? []) as number[]).includes(userId)).length;
     res.json({ count });
   } catch (err) {
     console.error('Unread count error:', err);
@@ -236,7 +236,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     // Seul le créateur ou un coach peut supprimer
-    if (notif.sender_id !== userId && userRole !== 'coach') {
+    if (notif.sender_id !== userId && userRole !== 'coach' && userRole !== 'admin') {
       res.status(403).json({ error: 'Non autorisé' });
       return;
     }

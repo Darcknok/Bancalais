@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../supabase';
 import { config } from '../config';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, type AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -64,10 +64,16 @@ router.post('/', async (req: Request, res: Response) => {
 // ─── GET /api/feedback — Get feedback for a specific race+swimmer ──
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
     const { competition_id, event_id, type_tour, nageur_iuf } = req.query;
 
     if (!competition_id || !event_id || !nageur_iuf) {
       res.status(400).json({ error: 'competition_id, event_id et nageur_iuf sont requis' });
+      return;
+    }
+
+    if (Number(nageur_iuf) !== authReq.userId && authReq.userRole !== 'coach' && authReq.userRole !== 'admin') {
+      res.status(403).json({ error: 'Accès refusé' });
       return;
     }
 
@@ -127,10 +133,16 @@ router.get('/swimmer/:nageur_iuf', async (req: Request, res: Response) => {
 // ─── DELETE /api/feedback — Delete a feedback ──
 router.delete('/', async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
     const { competition_id, event_id, type_tour, nageur_iuf } = req.body;
 
     if (!competition_id || !event_id || !nageur_iuf) {
       res.status(400).json({ error: 'competition_id, event_id et nageur_iuf sont requis' });
+      return;
+    }
+
+    if (Number(nageur_iuf) !== authReq.userId && authReq.userRole !== 'coach' && authReq.userRole !== 'admin') {
+      res.status(403).json({ error: 'Accès refusé' });
       return;
     }
 

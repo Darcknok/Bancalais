@@ -38,6 +38,7 @@ import {
   getEventResultsFromDB,
   saveResultsToDB,
 } from './persistence';
+import { authMiddleware, requireRole } from '../middleware/auth';
 import type { CacheKey } from './types';
 
 export const liveffnRouter = Router();
@@ -311,7 +312,7 @@ liveffnRouter.get('/swimmer/:iuf', async (req: Request, res: Response) => {
       return;
     }
 
-    const cacheKey: CacheKey = `swimmer_${iuf}`;
+    const cacheKey: CacheKey = `swimmer_${competitionId}_${iuf}`;
 
     const data = await cachedFetch(cacheKey, async () => {
       const html = await fetchSwimmerDetails(competitionId, iuf);
@@ -336,7 +337,7 @@ liveffnRouter.get('/club/:structureId', async (req: Request, res: Response) => {
       return;
     }
 
-    const cacheKey: CacheKey = `club_${structureId}`;
+    const cacheKey: CacheKey = `club_${competitionId}_${structureId}`;
 
     const data = await cachedFetch(cacheKey, async () => {
       const html = await fetchClubDetails(competitionId, structureId);
@@ -369,7 +370,7 @@ liveffnRouter.get('/live/:id', async (req: Request, res: Response) => {
     // Extraction des informations de session et de course depuis la page live
     const liveData = {
       competitionId: id,
-      isLive: html.includes('flag_page_deja_donne:1') || !html.includes('flag_page_deja_donne:0'),
+      isLive: html.includes('flag_page_deja_donne:1'),
       rawLength: html.length,
       // La page live se rafraîchit et contient les données de course
       // Le parsing complet sera amélioré dans les prochaines versions
@@ -384,7 +385,7 @@ liveffnRouter.get('/live/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/liveffn/cache/stats — Statistiques du cache (monitoring/admin).
  */
-liveffnRouter.get('/cache/stats', (_req: Request, res: Response) => {
+liveffnRouter.get('/cache/stats', authMiddleware, requireRole('admin'), (_req: Request, res: Response) => {
   const stats = getCacheStats();
   res.json(stats);
 });
@@ -392,7 +393,7 @@ liveffnRouter.get('/cache/stats', (_req: Request, res: Response) => {
 /**
  * DELETE /api/liveffn/cache — Invalide tout le cache en mémoire.
  */
-liveffnRouter.delete('/cache', (_req: Request, res: Response) => {
+liveffnRouter.delete('/cache', authMiddleware, requireRole('admin'), (_req: Request, res: Response) => {
   invalidateAllCache();
   res.json({ success: true, message: 'Cache invalidé' });
 });

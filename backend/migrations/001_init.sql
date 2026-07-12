@@ -20,6 +20,7 @@ create table if not exists profiles (
   prenom        text not null,
   nom           text not null,
   role          text not null check (role in ('swimmer', 'coach', 'admin')),
+  bio           text default '',
   avatar        text default 'person',
   club_id       bigint references clubs(id) on delete set null,
   referral_code_used text,

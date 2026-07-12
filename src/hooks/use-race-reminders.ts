@@ -34,6 +34,7 @@ type Props = {
 export function useRaceReminders({ events, minutesBefore = 10, previousResults }: Props) {
   const scheduledRef = useRef(false);
   const eventsKeyRef = useRef('');
+  const notifiedRef = useRef<Map<number, string>>(new Map());
 
   // ─── Planification des rappels ──────────────────────────────
   useEffect(() => {
@@ -45,38 +46,40 @@ export function useRaceReminders({ events, minutesBefore = 10, previousResults }
     // Si déjà planifié avec les mêmes données, ne rien faire
     if (scheduledRef.current && key === eventsKeyRef.current) return;
 
-    // Si les données ont changé, annuler les anciens rappels et replanifier
-    if (scheduledRef.current && key !== eventsKeyRef.current) {
-      cancelAllRaceReminders().catch(err =>
-        console.warn('[reminders] Erreur annulation anciens rappels:', err)
-      );
-    }
+    (async () => {
+      // Si les données ont changé, annuler les anciens rappels avant de replanifier
+      if (scheduledRef.current && key !== eventsKeyRef.current) {
+        await cancelAllRaceReminders().catch(err =>
+          console.warn('[reminders] Erreur annulation anciens rappels:', err)
+        );
+      }
 
-    eventsKeyRef.current = key;
-    scheduledRef.current = true;
+      eventsKeyRef.current = key;
+      scheduledRef.current = true;
 
-    events.forEach(event => {
-      if (!event.time || event.time === '—') return;
+      events.forEach(event => {
+        if (!event.time || event.time === '—') return;
 
-      // Construire la date/heure de la course
-      const raceDate = event.date ?? new Date().toISOString().split('T')[0];
-      const [hours, mins] = event.time.includes('h')
-        ? event.time.split('h')
-        : event.time.split(':');
-      const raceTime = new Date(`${raceDate}T${hours.padStart(2, '0')}:${(mins || '00').padStart(2, '0')}:00`);
+        // Construire la date/heure de la course
+        const raceDate = event.date ?? new Date().toISOString().split('T')[0];
+        const [hours, mins] = event.time.includes('h')
+          ? event.time.split('h')
+          : event.time.split(':');
+        const raceTime = new Date(`${raceDate}T${hours.padStart(2, '0')}:${(mins || '00').padStart(2, '0')}:00`);
 
-      scheduleRaceReminder({
-        identifier: `race-${event.id}`,
-        eventName: event.name,
-        raceTime,
-        minutesBefore,
+        scheduleRaceReminder({
+          identifier: `race-${event.id}`,
+          eventName: event.name,
+          raceTime,
+          minutesBefore,
+        });
       });
-    });
 
-    // Persister les données pour restauration au prochain démarrage
-    saveReminderData(events, minutesBefore).catch(err =>
-      console.warn('[reminders] Erreur sauvegarde persistante:', err)
-    );
+      // Persister les données pour restauration au prochain démarrage
+      saveReminderData(events, minutesBefore).catch(err =>
+        console.warn('[reminders] Erreur sauvegarde persistante:', err)
+      );
+    })();
 
     // PAS de cleanup — les rappels doivent survivre au démontage du composant
   }, [events, minutesBefore]);
@@ -95,8 +98,10 @@ export function useRaceReminders({ events, minutesBefore = 10, previousResults }
     events.forEach(event => {
       const currentResult = event.resultTime;
       const previousResult = previousResults.get(event.id);
+      const lastNotified = notifiedRef.current.get(event.id);
 
-      if (currentResult && currentResult !== previousResult && previousResult !== undefined) {
+      if (currentResult && currentResult !== previousResult && previousResult !== undefined && currentResult !== lastNotified) {
+        notifiedRef.current.set(event.id, currentResult);
         notifyRaceResult({
           eventName: event.name,
           time: currentResult,

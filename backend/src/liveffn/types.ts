@@ -181,8 +181,8 @@ export type CacheKey =
   | `competition_${number}_participants`
   | `competition_${number}_results_${number}`
   | `competition_${number}_startlist_${number}`
-  | `swimmer_${number}`
-  | `club_${number}`;
+  | `swimmer_${number}_${number}`
+  | `club_${number}_${number}`;
 
 // ─── API response types ──────────────────────────────────────────
 

@@ -187,7 +187,7 @@ async function liveffnFetch<T>(path: string, timeoutMs = 15000): Promise<{ data?
 
     return { data: body as T };
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    if (err instanceof Error && err.name === 'AbortError') {
       return { error: 'Connexion au serveur impossible (délai dépassé)' };
     }
     const message = err instanceof Error ? err.message : 'Erreur réseau';
@@ -297,7 +297,7 @@ export async function invalidateLiveFFNCache() {
     if (!res.ok) return { error: body.error ?? `Erreur ${res.status}` };
     return { data: body as { success: boolean; message: string } };
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    if (err instanceof Error && err.name === 'AbortError') {
       return { error: 'Connexion au serveur impossible (délai dépassé)' };
     }
     const message = err instanceof Error ? err.message : 'Erreur réseau';

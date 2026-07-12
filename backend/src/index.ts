@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config';
+import { authMiddleware } from './middleware/auth';
 import authRoutes from './routes/auth';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
@@ -49,8 +50,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-// Parsing du corps des requêtes en JSON
-app.use(express.json());
+// Parsing du corps des requêtes en JSON (limite 1 Mo pour éviter les abus)
+app.use(express.json({ limit: '1mb' }));
 // Fichiers statiques (photos de profils, logos clubs, etc.)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -70,8 +71,8 @@ app.use('/api/feedback', feedbackRoutes);
 // LiveFFN API — couche de cache/scraping pour les données FFN (liveffn.com)
 app.use('/api/liveffn', liveffnRouter);
 
-// Server monitoring — statut de la machine hôte (CPU, RAM, uptime)
-app.use('/api/server', serverRouter);
+// Server monitoring — statut de la machine hôte (CPU, RAM, uptime) — auth requis
+app.use('/api/server', authMiddleware, serverRouter);
 
 // Endpoint de health check pour les sondes de surveillance (Docker, load balancer, etc.)
 app.get('/api/health', (_req, res) => {
@@ -84,7 +85,10 @@ const server = app.listen(config.port, config.host, () => {
 });
 
 // Arrêt gracieux : ferme les connexions ouvertes avant de quitter (Docker, PM2, systemd)
+let isShuttingDown = false;
 function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
   console.log(`\n${signal} received — shutting down gracefully...`);
   const timeout = setTimeout(() => {
     console.error('⏱️  Forced shutdown after timeout');

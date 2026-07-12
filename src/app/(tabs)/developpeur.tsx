@@ -118,23 +118,6 @@ export default function DeveloppeurScreen() {
   const theme = useTheme();
   const { isAdmin } = useAuth();
 
-  if (!isAdmin) {
-    return (
-      <ThemedView style={styles.screen}>
-        <View style={styles.header}>
-          <View>
-            <ThemedText style={styles.headerTitle}>Administration</ThemedText>
-            <ThemedText style={styles.headerSub}>API : {API_BASE_URL}</ThemedText>
-          </View>
-        </View>
-        <View style={styles.emptyState}>
-          <Ionicons name="lock-closed-outline" size={32} color={theme.textSecondary} />
-          <ThemedText style={styles.emptyText}>Accès réservé aux administrateurs</ThemedText>
-        </View>
-      </ThemedView>
-    );
-  }
-
   const [activeTab, setActiveTab] = useState<TabName>('users');
   const [loading, setLoading] = useState(false);
 
@@ -422,6 +405,23 @@ export default function DeveloppeurScreen() {
     if (id == null) return 'Aucun club';
     return clubs.find(c => c.id === id)?.name ?? `Club #${id}`;
   };
+
+  if (!isAdmin) {
+    return (
+      <ThemedView style={styles.screen}>
+        <View style={styles.header}>
+          <View>
+            <ThemedText style={styles.headerTitle}>Administration</ThemedText>
+            <ThemedText style={styles.headerSub}>API : {API_BASE_URL}</ThemedText>
+          </View>
+        </View>
+        <View style={styles.emptyState}>
+          <Ionicons name="lock-closed-outline" size={32} color={theme.textSecondary} />
+          <ThemedText style={styles.emptyText}>Accès réservé aux administrateurs</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.screen}>

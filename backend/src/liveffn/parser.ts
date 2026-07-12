@@ -734,6 +734,7 @@ export function parseSwimmerResults(html: string): {
   //              "CALAIS OREFICE Mathias (2011) FRA - CN MARSEILLE"
   const headerText = decodeHtmlEntities($('td.resStructureIndividu1, td.resStructureIndividu2').first().text().trim());
   const headerMatch = headerText.match(/(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
+  let swimmer: Partial<LiveFFNSwimmer> = {};
   let club: Partial<LiveFFNClub> = {};
 
   if (headerMatch) {
@@ -899,6 +900,7 @@ export function parseClubDetails(html: string): {
   $('td.resStructureIndividu1, td.resStructureIndividu2').each((_, td) => {
     const headerText = decodeHtmlEntities($(td).text().trim());
     const headerMatch = headerText.match(/(.+?)\s*\((\d{4})\)\s*(\w{3})\s*-\s*(.+)/);
+    if (headerMatch) {
       const fullNamePart = headerMatch[1].trim();
       const parsed = parseFrenchName(fullNamePart);
       const swimmerData: Partial<LiveFFNSwimmer> = {
