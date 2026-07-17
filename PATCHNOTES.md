@@ -1,74 +1,74 @@
 # Patch Notes
 
-## v1.1.0 — Audit Sécurité & Corrections Critiques (2026-07-17)
+## v1.1.0 — Security Audit & Critical Fixes (2026-07-17)
 
 ### Audit
-Audit de sécurité complet réalisé par 5 agents d'audit (auth, BDD, frontend, scraping, infra) suivi d'une équipe de 3 développeurs + 1 inspecteur.
+Full security audit performed by 5 audit agents (auth, database, frontend, scraping, infrastructure) followed by a team of 3 developers + 1 inspector.
 
-**52 vulnérabilités identifiées → 19 corrections critiques/hautes/moyennes appliquées.**
+**52 vulnerabilities identified → 19 critical/high/medium fixes applied.**
 
 ---
 
-### Sécurité Authentification
+### Authentication Security
 
-| Sévérité | Correction |
-|----------|------------|
-| **Critique** | Auto-inscription : rôle `admin` retiré des rôles autorisés. Seuls `swimmer` et `coach` sont acceptés. |
-| **Haute** | JWT : algorithme verrouillé sur `HS256` (prévention attaque `alg:none`). |
-| **Haute** | JWT : durée de vie réduite de 30 jours à 1 heure. Ajout de refresh tokens (30 jours) avec endpoint `/api/auth/refresh`. |
-| **Haute** | Login : messages d'erreur unifiés (`"Identifiants incorrects"`) pour empêcher l'énumération de comptes. |
-| **Moyenne** | Sub JWT : validation `NaN` ajoutée après `parseInt` pour éviter les requêtes avec un userId invalide. |
+| Severity | Fix |
+|----------|-----|
+| **Critical** | Self-registration: `admin` role removed from allowed roles. Only `swimmer` and `coach` are accepted. |
+| **High** | JWT: algorithm locked to `HS256` (prevents `alg:none` attack). |
+| **High** | JWT: lifetime reduced from 30 days to 1 hour. Refresh tokens added (30 days) with `/api/auth/refresh` endpoint. |
+| **High** | Login: unified error messages (`"Invalid credentials"`) to prevent account enumeration. |
+| **Medium** | JWT sub: `NaN` validation added after `parseInt` to prevent requests with invalid userId. |
 
-### Sécurité Mots de Passe
+### Password Security
 
-| Sévérité | Correction |
-|----------|------------|
-| **Haute** | Politique renforcée : minimum 8 caractères, 1 majuscule, 1 chiffre (côté client ET serveur). |
+| Severity | Fix |
+|----------|-----|
+| **High** | Strengthened policy: minimum 8 characters, 1 uppercase letter, 1 digit (enforced on both client AND server). |
 
-### Sécurité Routes & Permissions
+### Routes & Permissions Security
 
-| Sévérité | Correction |
-|----------|------------|
-| **Critique** | `race_feedback` : les nageurs ne peuvent créer/lire que leur propre feedback (vérification `nageur_iuf === userId`). |
-| **Haute** | Notifications système : réservées aux admins uniquement. |
-| **Haute** | Notifications : le `club_id` est forcé au club de l'appelant pour les coaches (pas d'impersonation cross-club). |
-| **Haute** | Notifications : vérification du club sur lecture/suppression (IDOR corrigé). |
-| **Haute** | Notifications : suppression d'une notification système réservée à l'expéditeur ou un admin. |
-| **Haute** | Admin PATCH : validation des valeurs de rôle (`swimmer/coach/admin`) + coaches ne peuvent pas.promouvoir en admin. |
-| **Haute** | Admin : les coaches ne voient/modifient que les utilisateurs de leur propre club. |
-| **Moyenne** | LiveFFN : IDs numériques validés (0–10M) sur tous les endpoints. |
+| Severity | Fix |
+|----------|-----|
+| **Critical** | `race_feedback`: swimmers can only create/read their own feedback (`nageur_iuf === userId` check). |
+| **High** | System notifications: restricted to admins only. |
+| **High** | Notifications: `club_id` forced to caller's club for coaches (prevents cross-club impersonation). |
+| **High** | Notifications: club scoping on read/delete (IDOR fixed). |
+| **High** | System notification deletion: restricted to sender or admin only. |
+| **High** | Admin PATCH: role values validated (`swimmer/coach/admin`) + coaches cannot promote to admin. |
+| **High** | Admin: coaches can only view/modify users from their own club. |
+| **Medium** | LiveFFN: numeric IDs validated (0–10M range) on all endpoints. |
 
-### Sécurité Réseau & Infrastructure
+### Network & Infrastructure Security
 
-| Sévérité | Correction |
-|----------|------------|
-| **Critique** | HTTPS forcé en production (`__DEV__ ? 'http' : 'https'`). |
-| **Critique** | Android : `usesCleartextTraffic` désactivé (3 mécanismes corrigés). |
-| **Haute** | CORS : origine `null` rejetée en production. |
-| **Moyenne** | Rate limiting ajouté : login (10/15min), register (5/h), LiveFFN (30/min). Trust proxy configuré. |
-| **Moyenne** | Erreurs LiveFFN : messages génériques retournés au client (plus de fuite d'infos internes). |
+| Severity | Fix |
+|----------|-----|
+| **Critical** | HTTPS enforced in production (`__DEV__ ? 'http' : 'https'`). |
+| **Critical** | Android: `usesCleartextTraffic` disabled (3 mechanisms fixed). |
+| **High** | CORS: `null` origin rejected in production. |
+| **Medium** | Rate limiting added: login (10/15min), register (5/h), LiveFFN (30/min). Trust proxy configured. |
+| **Medium** | LiveFFN errors: generic messages returned to client (no more internal info leaks). |
 
-### Corrections Encodage & Données
+### Encoding & Data Fixes
 
-| Sévérité | Correction |
-|----------|------------|
-| **Haute** | Fetcher : détection automatique du charset depuis le header `Content-Type` (UTF-8 par défaut au lieu d'ISO-8859-1). Les accents sur les épreuves (ex: "séries") s'affichent correctement. |
-| **Haute** | Persistence : `ensureCompetitionExists()` avant sauvegarde des épreuves (FK constraint corrigée). |
+| Severity | Fix |
+|----------|-----|
+| **High** | Fetcher: automatic charset detection from `Content-Type` header (UTF-8 by default instead of ISO-8859-1). Accented characters in events (e.g. "séries") now display correctly. |
+| **High** | Persistence: `ensureCompetitionExists()` called before saving events (FK constraint fixed). |
 
 ### Frontend
 
-| Correction |
-|------------|
-| Refresh token : flow complet (stockage, retry automatique 401, nettoyage au logout). |
-| Password policy : regex côté client synchronisée avec le serveur. |
-| Protocol : production force HTTPS, développement autorise HTTP. |
+| Fix |
+|-----|
+| Refresh token: full flow (storage, automatic 401 retry, logout cleanup). |
+| Password policy: client-side regex synced with server. |
+| Protocol: production forces HTTPS, development allows HTTP. |
 
 ---
 
-### Fichiers modifiés
+### Modified Files
 `app.json`, `plugins/with-android-cleartext.js`, `src/lib/api.ts`, `src/context/auth.tsx`, `backend/src/index.ts`, `backend/src/middleware/auth.ts`, `backend/src/routes/auth.ts`, `backend/src/routes/admin.ts`, `backend/src/routes/feedback.ts`, `backend/src/routes/notifications.ts`, `backend/src/liveffn/fetcher.ts`, `backend/src/liveffn/persistence.ts`, `backend/src/liveffn/routes.ts`
 
 ### Notes
-- Les clés JWT et Supabase dans `backend/.env` devraient être rotées si le repo était accessible publiquement.
-- Le refresh token n'a pas de révocation server-side (nécessite Redis/blocklist pour une implémentation complète).
-- Le rate limiter est en mémoire (single-instance uniquement).
+- JWT and Supabase keys in `backend/.env` should be rotated if the repo was ever publicly accessible.
+- Refresh tokens have no server-side revocation (requires Redis/blocklist for full implementation).
+- Rate limiter is in-memory (single-instance only).
