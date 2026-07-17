@@ -37,6 +37,7 @@ import {
   saveEventToDB,
   getEventResultsFromDB,
   saveResultsToDB,
+  ensureCompetitionExists,
 } from './persistence';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import type { CacheKey } from './types';
@@ -47,8 +48,7 @@ export const liveffnRouter = Router();
 // Retourne un 502 (Bad Gateway) car les erreurs viennent du scraping externe
 function handleError(res: Response, error: unknown, context: string) {
   console.error(`LiveFFN ${context} error:`, error);
-  const message = error instanceof Error ? error.message : 'Erreur lors de la récupération des données LiveFFN';
-  res.status(502).json({ error: message, context });
+  res.status(502).json({ error: 'Erreur lors de la récupération des données LiveFFN', context });
 }
 
 // --- Endpoints API LiveFFN ---
@@ -92,7 +92,7 @@ liveffnRouter.get('/competitions', async (req: Request, res: Response) => {
 liveffnRouter.get('/competitions/:id', async (req: Request, res: Response) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) {
+    if (isNaN(id) || id < 0 || id > 10000000) {
       res.status(400).json({ error: 'ID de compétition invalide' });
       return;
     }
@@ -127,7 +127,7 @@ liveffnRouter.get('/competitions/:id', async (req: Request, res: Response) => {
 liveffnRouter.get('/competitions/:id/program', async (req: Request, res: Response) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) {
+    if (isNaN(id) || id < 0 || id > 10000000) {
       res.status(400).json({ error: 'ID de compétition invalide' });
       return;
     }
@@ -138,6 +138,7 @@ liveffnRouter.get('/competitions/:id/program', async (req: Request, res: Respons
       const html = await fetchProgram(id);
       return parseProgram(html);
     }, undefined, async (data) => {
+      await ensureCompetitionExists(id);
       for (const session of data) {
         for (const event of session.epreuves) {
           // Ignorer les épreuves sans ID valide (présence non ok, tooltip absent)
@@ -166,7 +167,7 @@ liveffnRouter.get('/competitions/:id/program', async (req: Request, res: Respons
 liveffnRouter.get('/competitions/:id/events', async (req: Request, res: Response) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) {
+    if (isNaN(id) || id < 0 || id > 10000000) {
       res.status(400).json({ error: 'ID de compétition invalide' });
       return;
     }
@@ -177,6 +178,7 @@ liveffnRouter.get('/competitions/:id/events', async (req: Request, res: Response
       const html = await fetchProgram(id);
       return parseProgram(html);
     }, undefined, async (data) => {
+      await ensureCompetitionExists(id);
       for (const session of data) {
         for (const event of session.epreuves) {
           if (event.id === 0 || event.id == null) continue;
@@ -242,7 +244,7 @@ liveffnRouter.get('/competitions/:id/results/:eventId', async (req: Request, res
   try {
     const compId = parseInt(String(req.params.id), 10);
     const eventId = parseInt(String(req.params.eventId), 10);
-    if (isNaN(compId) || isNaN(eventId)) {
+    if (isNaN(compId) || compId < 0 || compId > 10000000 || isNaN(eventId) || eventId < 0 || eventId > 10000000) {
       res.status(400).json({ error: 'ID de compétition ou épreuve invalide' });
       return;
     }
@@ -281,7 +283,7 @@ liveffnRouter.get('/competitions/:id/startlist/:eventId', async (req: Request, r
   try {
     const compId = parseInt(String(req.params.id), 10);
     const eventId = parseInt(String(req.params.eventId), 10);
-    if (isNaN(compId) || isNaN(eventId)) {
+    if (isNaN(compId) || compId < 0 || compId > 10000000 || isNaN(eventId) || eventId < 0 || eventId > 10000000) {
       res.status(400).json({ error: 'ID de compétition ou épreuve invalide' });
       return;
     }
@@ -307,7 +309,7 @@ liveffnRouter.get('/swimmer/:iuf', async (req: Request, res: Response) => {
   try {
     const iuf = parseInt(String(req.params.iuf), 10);
     const competitionId = parseInt(String(req.query.competition ?? ''), 10);
-    if (isNaN(iuf) || isNaN(competitionId)) {
+    if (isNaN(iuf) || iuf < 0 || iuf > 10000000 || isNaN(competitionId) || competitionId < 0 || competitionId > 10000000) {
       res.status(400).json({ error: 'iuf et competition sont requis' });
       return;
     }
@@ -332,7 +334,7 @@ liveffnRouter.get('/club/:structureId', async (req: Request, res: Response) => {
   try {
     const structureId = parseInt(String(req.params.structureId), 10);
     const competitionId = parseInt(String(req.query.competition ?? ''), 10);
-    if (isNaN(structureId) || isNaN(competitionId)) {
+    if (isNaN(structureId) || structureId < 0 || structureId > 10000000 || isNaN(competitionId) || competitionId < 0 || competitionId > 10000000) {
       res.status(400).json({ error: 'structureId et competition sont requis' });
       return;
     }
@@ -357,7 +359,7 @@ liveffnRouter.get('/club/:structureId', async (req: Request, res: Response) => {
 liveffnRouter.get('/live/:id', async (req: Request, res: Response) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    if (isNaN(id)) {
+    if (isNaN(id) || id < 0 || id > 10000000) {
       res.status(400).json({ error: 'ID de compétition invalide' });
       return;
     }

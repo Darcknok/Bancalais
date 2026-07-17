@@ -30,6 +30,9 @@ import {
   getToken,
   setToken,
   removeToken,
+  setRefreshToken,
+  removeRefreshToken,
+  refreshAccessToken,
 } from '@/lib/api';
 import { clearReminderData } from '@/lib/reminder-storage';
 import { cancelAllRaceReminders } from '@/lib/notifications';
@@ -90,13 +93,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Vérifier la validité du token en récupérant le profil utilisateur
-      const { data, error } = await getMe();
+      let { data, error } = await getMe();
+      // Si le token est expiré, tenter un rafraîchissement
+      if (error && error.includes('Token')) {
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          ({ data, error } = await getMe());
+        }
+      }
       if (cancelled) return;
       if (data?.user) {
         setUser(profileToUser(data.user));
       } else {
         // Token invalide ou expiré → nettoyage
         await removeToken();
+        await removeRefreshToken();
       }
       setIsLoading(false);
     })();
@@ -109,8 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) return error;
     if (!data) return 'Erreur de connexion';
 
-    // Stocker le token et restaurer le profil utilisateur
+    // Stocker les tokens et restaurer le profil utilisateur
     await setToken(data.token);
+    if (data.refreshToken) await setRefreshToken(data.refreshToken);
     setUser(profileToUser(data.user));
     return null;
   }, []);
@@ -124,8 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role: UserRole;
     referralCode?: string;
   }): Promise<string | null> => {
-    // Validation côté client : mot de passe minimal de 4 caractères
-    if (form.password.length < 4) return 'Le mot de passe doit faire au moins 4 caractères.';
+    // Validation côté client : mot de passe robuste
+    if (!/^(?=.*[A-Z])(?=.*\d).{8,}$/.test(form.password)) {
+      return 'Le mot de passe doit faire au moins 8 caractères avec 1 majuscule et 1 chiffre.';
+    }
 
     // Conversion camelCase → snake_case pour l'API
     const { data, error } = await registerAPI({
@@ -141,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!data) return 'Erreur lors de la création du compte';
 
     await setToken(data.token);
+    if (data.refreshToken) await setRefreshToken(data.refreshToken);
     setUser(profileToUser(data.user));
     return null;
   }, []);
@@ -148,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- Déconnexion ---
   const logout = useCallback(async () => {
     await removeToken();
+    await removeRefreshToken();
     setUser(null);
     clearReminderData().catch(() => {});
     cancelAllRaceReminders().catch(() => {});

@@ -26,12 +26,14 @@ import { Platform } from 'react-native';
 // --- Configuration ---
 
 const TOKEN_KEY = 'bancalais_jwt';
+const REFRESH_TOKEN_KEY = 'bancalais_refresh_jwt';
 
 // Surchargeable via EXPO_PUBLIC_API_HOST
 // Par défaut : IP locale du serveur pour accès depuis le réseau local
 const DEV_API_HOST = process.env.EXPO_PUBLIC_API_HOST || 'bancalais.freeboxos.fr';
 
-export const API_BASE_URL = `http://${DEV_API_HOST}:4000`;
+const API_PROTOCOL = __DEV__ ? 'http' : 'https';
+export const API_BASE_URL = `${API_PROTOCOL}://${DEV_API_HOST}:4000`;
 
 // --- Stockage cross-platform du token JWT ---
 // SecureStore sur les plateformes natives (iOS/Android), localStorage sur web
@@ -77,6 +79,50 @@ export async function removeToken() {
   await storage.remove(TOKEN_KEY);
 }
 
+// --- Refresh token helpers ---
+
+export async function getRefreshToken(): Promise<string | null> {
+  return storage.get(REFRESH_TOKEN_KEY);
+}
+
+export async function setRefreshToken(token: string) {
+  await storage.set(REFRESH_TOKEN_KEY, token);
+}
+
+export async function removeRefreshToken() {
+  await storage.remove(REFRESH_TOKEN_KEY);
+}
+
+// --- Refresh token logic ---
+
+export async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.token) return null;
+    await setToken(body.token);
+    if (body.refreshToken) await setRefreshToken(body.refreshToken);
+    return body.token;
+  } catch {
+    return null;
+  }
+}
+
+// --- Token refresh logic ---
+
+export type LoginResponse = {
+  token: string;
+  refreshToken: string;
+  user: ApiProfile;
+};
+
 // --- Fonction utilitaire : timeout pour les requêtes API ---
 // Rejette avec un message explicite si le serveur ne répond pas à temps
 function timeoutPromise(ms: number) {
@@ -92,6 +138,7 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
   timeoutMs = 10000,
+  _retried = false,
 ): Promise<{ data?: T; error?: string }> {
   const token = await getToken();
   const headers: Record<string, string> = {
@@ -111,6 +158,16 @@ async function apiFetch<T>(
     ]);
 
     const body = await res.json();
+
+    if (res.status === 401 && !_retried && !path.includes('/api/auth/')) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        return apiFetch<T>(path, options, timeoutMs, true);
+      }
+      await removeToken();
+      await removeRefreshToken();
+      return { error: 'Session expirée, veuillez vous reconnecter' };
+    }
 
     if (!res.ok) {
       return { error: body.error ?? `Erreur ${res.status}` };
@@ -142,11 +199,6 @@ export type ApiProfile = {
   mention_notifications: boolean;
   invite_notifications: boolean;
   reminder_delay?: number;
-};
-
-export type LoginResponse = {
-  token: string;
-  user: ApiProfile;
 };
 
 export type RegisterBody = {

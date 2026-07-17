@@ -17,8 +17,40 @@ import competitionRoutes from './routes/competitions';
 import feedbackRoutes from './routes/feedback';
 import { liveffnRouter } from './liveffn/routes';
 import { serverRouter } from './routes/server';
+import type { Request, Response, NextFunction } from 'express';
 
 const app = express();
+
+// Faire confiance au premier proxy (Nginx, Cloudflare, etc.) pour le rate limiting par IP
+app.set('trust proxy', 1);
+
+// --- Simple in-memory rate limiter ---
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+function rateLimit(windowMs: number, max: number) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const key = req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const entry = rateLimitStore.get(key);
+    if (entry && entry.resetAt > now) {
+      if (entry.count >= max) {
+        res.status(429).json({ error: 'Trop de requêtes, réessayez plus tard' });
+        return;
+      }
+      entry.count++;
+    } else {
+      rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    }
+    next();
+  };
+}
+
+// Periodic cleanup of expired rate limit entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore) {
+    if (entry.resetAt <= now) rateLimitStore.delete(key);
+  }
+}, 60_000);
 
 // Gestionnaires d'erreurs globaux pour les rejections/exceptions non attrapées
 process.on('unhandledRejection', (reason) => {
@@ -42,7 +74,9 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 // CORS : autorise uniquement les origines listées dans la config (.env)
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || config.corsOrigins.includes(origin)) {
+    if (!origin && config.nodeEnv === 'production') {
+      callback(new Error('Not allowed by CORS'));
+    } else if (!origin || config.corsOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -56,7 +90,9 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // --- Montage des routes API ---
-// Auth : inscription, connexion, profil
+// Auth : inscription, connexion, profil (rate limité)
+app.use('/api/auth/login', rateLimit(15 * 60 * 1000, 10));
+app.use('/api/auth/register', rateLimit(60 * 60 * 1000, 5));
 app.use('/api/auth', authRoutes);
 // Administration : gestion des comptes, paramètres club
 app.use('/api/admin', adminRoutes);
@@ -68,7 +104,8 @@ app.use('/api/competitions', competitionRoutes);
 // Feedback API — persistance des ressentis nageur
 app.use('/api/feedback', feedbackRoutes);
 
-// LiveFFN API — couche de cache/scraping pour les données FFN (liveffn.com)
+// LiveFFN API — couche de cache/scraping pour les données FFN (liveffn.com) (rate limité)
+app.use('/api/liveffn', rateLimit(60 * 1000, 30));
 app.use('/api/liveffn', liveffnRouter);
 
 // Server monitoring — statut de la machine hôte (CPU, RAM, uptime) — auth requis

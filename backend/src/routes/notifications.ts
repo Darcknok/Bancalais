@@ -57,11 +57,17 @@ router.post('/read', async (req, res) => {
 
     const { data: notif } = await supabase
       .from('notifications')
-      .select('read_by')
+      .select('read_by, club_id')
       .eq('id', id)
       .single();
 
     if (!notif) {
+      res.status(404).json({ error: 'Notification introuvable' });
+      return;
+    }
+
+    const userClubId = authReq.clubId;
+    if (notif.club_id !== null && notif.club_id !== userClubId) {
       res.status(404).json({ error: 'Notification introuvable' });
       return;
     }
@@ -180,6 +186,13 @@ router.post('/', async (req, res) => {
 
     // Seuls les coachs peuvent créer des notifications de coach/rappel pour leur club
     // Seuls les devs (n'importe qui pour l'instant) peuvent créer des notifications système
+    if (type === 'system') {
+      if (userRole !== 'admin') {
+        res.status(403).json({ error: 'Seuls les administrateurs peuvent créer des notifications système' });
+        return;
+      }
+    }
+
     if (type === 'coach' || type === 'reminder') {
       if (userRole !== 'coach') {
         res.status(403).json({ error: 'Seuls les entraîneurs peuvent créer ce type de notification' });
@@ -192,7 +205,7 @@ router.post('/', async (req, res) => {
       title,
       body,
       sender_id: userId,
-      club_id: club_id ?? userClubId ?? null,
+      club_id: userRole === 'admin' ? (club_id ?? userClubId ?? null) : (userClubId ?? null),
       target_role: target_role ?? null,
       link: link ?? null,
     };
@@ -226,7 +239,7 @@ router.delete('/:id', async (req, res) => {
 
     const { data: notif } = await supabase
       .from('notifications')
-      .select('sender_id')
+      .select('sender_id, club_id')
       .eq('id', id)
       .single();
 
@@ -235,8 +248,18 @@ router.delete('/:id', async (req, res) => {
       return;
     }
 
-    // Seul le créateur ou un coach peut supprimer
-    if (notif.sender_id !== userId && userRole !== 'coach' && userRole !== 'admin') {
+    if (notif.sender_id !== userId && userRole !== 'admin' && userRole !== 'coach') {
+      res.status(403).json({ error: 'Non autorisé' });
+      return;
+    }
+
+    // Les notifications system (club_id=null) ne peuvent être supprimées que par un admin ou l'expéditeur
+    if (notif.club_id === null && notif.sender_id !== userId && userRole !== 'admin') {
+      res.status(403).json({ error: 'Non autorisé' });
+      return;
+    }
+
+    if (userRole === 'coach' && notif.club_id !== null && notif.club_id !== authReq.clubId) {
       res.status(403).json({ error: 'Non autorisé' });
       return;
     }

@@ -29,8 +29,17 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
   const token = header.slice(7);
   try {
-    const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
-    req.userId = parseInt(decoded.sub, 10);
+    const decoded = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload;
+    if ((decoded as Record<string, unknown>).type === 'refresh') {
+      res.status(401).json({ error: 'Token refresh non autorisé pour l\'accès API' });
+      return;
+    }
+    const parsedId = parseInt(decoded.sub, 10);
+    if (isNaN(parsedId)) {
+      res.status(401).json({ error: 'Token invalide' });
+      return;
+    }
+    req.userId = parsedId;
     req.userEmail = decoded.email;
     req.userRole = decoded.user_role;
     req.clubId = decoded.club_id;

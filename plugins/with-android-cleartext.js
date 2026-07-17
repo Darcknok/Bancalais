@@ -1,11 +1,11 @@
 /**
- * Expo Config Plugin — Force cleartext traffic on Android
+ * Expo Config Plugin — Control cleartext traffic on Android
  *
- * Double sécurité : injecte `android:usesCleartextTraffic="true"`
+ * Injecte `android:usesCleartextTraffic="false"`
  * directement dans le <application> du AndroidManifest.xml.
  *
- * Résout sur Android 9+ :
- *   "Clear text communication to ... not permitted by network security policy"
+ * En production, le trafic clair est désactivé pour la sécurité.
+ * Le protocole HTTPS est utilisé par défaut côté client.
  */
 const { withAndroidManifest } = require('expo/config-plugins');
 
@@ -13,8 +13,8 @@ module.exports = function withAndroidCleartext(config) {
   return withAndroidManifest(config, (androidConfig) => {
     const mainApp = androidConfig.modResults.manifest.application?.[0];
     if (mainApp?.$) {
-      // Force explicit cleartext permission (double sécurité)
-      mainApp.$['android:usesCleartextTraffic'] = 'true';
+      // Désactiver le trafic clair (sécurité)
+      mainApp.$['android:usesCleartextTraffic'] = 'false';
     }
     return androidConfig;
   });

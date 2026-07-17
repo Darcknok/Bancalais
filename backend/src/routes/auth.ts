@@ -22,7 +22,7 @@ function toSafeProfile(p: Profile): SafeProfile {
   return safe;
 }
 
-/** Signe un JWT contenant les informations essentielles du profil (durée : 30 jours) */
+/** Signe un JWT contenant les informations essentielles du profil (durée : 1 heure pour l'access token) */
 function signToken(profile: Profile): string {
   const payload = {
     sub: String(profile.id),
@@ -31,6 +31,20 @@ function signToken(profile: Profile): string {
     club_id: profile.club_id,
     user_role: profile.role,
     email: profile.email,
+    type: 'access' as const,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
+  };
+  return jwt.sign(payload, config.jwtSecret);
+}
+
+/** Signe un refresh token (durée : 30 jours) */
+function signRefreshToken(profile: Profile): string {
+  const payload = {
+    sub: String(profile.id),
+    role: 'authenticated' as const,
+    aud: 'authenticated' as const,
+    type: 'refresh' as const,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
   };
@@ -48,13 +62,13 @@ router.post('/register', async (req, res) => {
       return;
     }
 
-    if (body.password.length < 8) {
-      res.status(400).json({ error: 'Le mot de passe doit faire au moins 8 caractères' });
+    if (body.password.length < 8 || !/[A-Z]/.test(body.password) || !/\d/.test(body.password)) {
+      res.status(400).json({ error: 'Le mot de passe doit faire au moins 8 caractères avec 1 majuscule et 1 chiffre' });
       return;
     }
 
-    if (!['swimmer', 'coach', 'admin'].includes(body.role)) {
-      res.status(400).json({ error: 'Rôle invalide' });
+    if (!['swimmer', 'coach'].includes(body.role)) {
+      res.status(403).json({ error: 'Inscription non autorisée avec ce rôle' });
       return;
     }
 
@@ -104,7 +118,8 @@ router.post('/register', async (req, res) => {
 
     const created = createdJson as unknown as Profile;
     const token = signToken(created);
-    res.status(201).json({ token, user: toSafeProfile(created) });
+    const refreshToken = signRefreshToken(created);
+    res.status(201).json({ token, refreshToken, user: toSafeProfile(created) });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -129,18 +144,19 @@ router.post('/login', async (req, res) => {
       .maybeSingle();
 
     if (!profile) {
-      res.status(401).json({ error: 'Aucun compte trouvé avec cet email' });
+      res.status(401).json({ error: 'Identifiants incorrects' });
       return;
     }
 
     const valid = await bcrypt.compare(body.password, profile.hashed_password);
     if (!valid) {
-      res.status(401).json({ error: 'Mot de passe incorrect' });
+      res.status(401).json({ error: 'Identifiants incorrects' });
       return;
     }
 
     const token = signToken(profile);
-    res.json({ token, user: toSafeProfile(profile) });
+    const refreshToken = signRefreshToken(profile);
+    res.json({ token, refreshToken, user: toSafeProfile(profile) });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -279,6 +295,45 @@ router.get('/club/:code', async (req, res) => {
   } catch (err) {
     console.error('Club lookup error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// --- Route : Rafraîchissement du token ---
+// POST /api/auth/refresh — Échange un refresh token contre un nouvel access token
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body as { refreshToken?: string };
+    if (!refreshToken) {
+      res.status(400).json({ error: 'Refresh token requis' });
+      return;
+    }
+
+    const decoded = jwt.verify(refreshToken, config.jwtSecret, { algorithms: ['HS256'] }) as {
+      sub: string; type?: string;
+    };
+
+    if (decoded.type !== 'refresh') {
+      res.status(401).json({ error: 'Token invalide' });
+      return;
+    }
+
+    const userId = parseInt(decoded.sub, 10);
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!profile) {
+      res.status(401).json({ error: 'Utilisateur introuvable' });
+      return;
+    }
+
+    const newToken = signToken(profile);
+    const newRefreshToken = signRefreshToken(profile);
+    res.json({ token: newToken, refreshToken: newRefreshToken });
+  } catch {
+    res.status(401).json({ error: 'Refresh token invalide ou expiré' });
   }
 });
 

@@ -353,6 +353,34 @@ export async function getCompetitionFromDB(id: number): Promise<LiveFFNCompetiti
   return (data.raw_json as unknown) as LiveFFNCompetitionDetail | null;
 }
 
+// ─── Ensure competition exists (for FK) ────────────────────────
+
+/**
+ * Vérifie qu'une compétition existe dans liveffn_competitions.
+ * Si elle n'existe pas, crée une entrée minimale pour satisfaire la FK.
+ */
+export async function ensureCompetitionExists(competitionId: number): Promise<void> {
+  const { data: existing } = await supabase
+    .from('liveffn_competitions')
+    .select('id')
+    .eq('id', competitionId)
+    .maybeSingle();
+
+  if (existing) return;
+
+  // Entrée minimale pour satisfaire la contrainte FK
+  const { error } = await supabase
+    .from('liveffn_competitions')
+    .upsert({
+      id: competitionId,
+      nom: `Compétition ${competitionId}`,
+      ville: '',
+      fetched_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+  if (error) console.error(`[persistence] ensureCompetitionExists(${competitionId}) error:`, error.message);
+}
+
 // ─── Events (epreuves) ──────────────────────────────────────────
 
 type EventRow = LiveFFNEvent & {

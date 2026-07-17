@@ -45,14 +45,20 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<strin
         );
       }
 
-      // ─── MODIFICATION ICI ───────────────────────────────────────────
-      // Au lieu de response.text(), on récupère les données brutes
       const buffer = await response.arrayBuffer();
-      
-      // On décode manuellement en utilisant l'encodage historique du site
-      const decoder = new TextDecoder('iso-8859-1');
+
+      // Détecter l'encodage depuis le Content-Type header
+      const contentType = response.headers.get('content-type') || '';
+      const charsetMatch = contentType.match(/charset\s*=\s*([^\s;]+)/i);
+      const declaredCharset = charsetMatch ? charsetMatch[1].toLowerCase() : '';
+
+      let encoding = 'utf-8'; // par défaut (standard moderne)
+      if (declaredCharset === 'iso-8859-1' || declaredCharset === 'latin1' || declaredCharset === 'windows-1252') {
+        encoding = 'iso-8859-1';
+      }
+
+      const decoder = new TextDecoder(encoding);
       return decoder.decode(buffer);
-      // ────────────────────────────────────────────────────────────────
       
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));

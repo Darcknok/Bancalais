@@ -12,12 +12,20 @@ router.use(authMiddleware);
 router.use(requireRole('coach', 'admin'));
 
 // GET /api/admin/users — list all users (safe, no password)
-router.get('/users', async (_req, res) => {
+// Les coaches ne voient que les utilisateurs de leur club
+router.get('/users', async (req, res) => {
   try {
-    const { data: users, error } = await supabase
+    const authReq = req as AuthRequest;
+    let query = supabase
       .from('profiles')
       .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications, reminder_delay')
       .order('id');
+
+    if (authReq.userRole === 'coach' && authReq.clubId) {
+      query = query.eq('club_id', authReq.clubId);
+    }
+
+    const { data: users, error } = await query;
 
     if (error) throw error;
     res.json({ users });
@@ -49,6 +57,25 @@ router.get('/users/:id', async (req, res) => {
 // PATCH /api/admin/users/:id — update any user
 router.patch('/users/:id', async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
+    const targetId = parseInt(String(req.params.id), 10);
+
+    if (authReq.userRole === 'coach') {
+      const { data: targetUser, error: fetchErr } = await supabase
+        .from('profiles')
+        .select('club_id')
+        .eq('id', targetId)
+        .maybeSingle();
+      if (fetchErr || !targetUser) {
+        res.status(404).json({ error: 'Utilisateur introuvable' });
+        return;
+      }
+      if (targetUser.club_id !== authReq.clubId) {
+        res.status(403).json({ error: 'Accès refusé : cet utilisateur n\'appartient pas à votre club' });
+        return;
+      }
+    }
+
     const allowedFields = [
       'prenom', 'nom', 'email', 'role', 'avatar',
       'club_id', 'referral_code_used',
@@ -64,6 +91,19 @@ router.patch('/users/:id', async (req, res) => {
       }
     }
 
+    if (updates.role !== undefined) {
+      const validRoles = ['swimmer', 'coach', 'admin'];
+      if (!validRoles.includes(updates.role as string)) {
+        res.status(400).json({ error: 'Rôle invalide' });
+        return;
+      }
+      const authReq = req as AuthRequest;
+      if (authReq.userRole !== 'admin' && updates.role === 'admin') {
+        res.status(403).json({ error: 'Seul un administrateur peut attribuer le rôle admin' });
+        return;
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       res.status(400).json({ error: 'Aucun champ à mettre à jour' });
       return;
@@ -72,7 +112,7 @@ router.patch('/users/:id', async (req, res) => {
     const { data: updated, error } = await supabase
       .from('profiles')
       .update(updates)
-      .eq('id', parseInt(String(req.params.id), 10))
+      .eq('id', targetId)
       .select('id, email, prenom, nom, role, avatar, club_id, referral_code_used, joined_at, message_notifications, announcement_notifications, event_notifications, mention_notifications, invite_notifications, reminder_delay')
       .single();
 

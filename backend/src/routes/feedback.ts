@@ -10,6 +10,7 @@ router.use(authMiddleware);
 // ─── POST /api/feedback — Save or update feedback ──────────────
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
     const {
       competition_id,
       event_id,
@@ -24,6 +25,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (!competition_id || !event_id || !nageur_iuf) {
       res.status(400).json({ error: 'competition_id, event_id et nageur_iuf sont requis' });
+      return;
+    }
+
+    if (authReq.userRole === 'swimmer' && Number(nageur_iuf) !== authReq.userId) {
+      res.status(403).json({ error: 'Accès refusé : vous ne pouvez créer un feedback que pour vous-même' });
       return;
     }
 
@@ -102,7 +108,14 @@ router.get('/', async (req: Request, res: Response) => {
 // ─── GET /api/feedback/swimmer/:nageur_iuf — Get all feedbacks for a swimmer ──
 router.get('/swimmer/:nageur_iuf', async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
     const { nageur_iuf } = req.params;
+
+    if (authReq.userRole === 'swimmer' && Number(nageur_iuf) !== authReq.userId) {
+      res.status(403).json({ error: 'Accès refusé' });
+      return;
+    }
+
     const { competition_id } = req.query;
 
     let query = supabase
